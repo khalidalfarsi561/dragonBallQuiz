@@ -35,6 +35,10 @@ export interface UserRecord {
   power_level: number;
   zenkai_boosts: number;
   current_form: string;
+
+  // Zenkai persistence (stored in DB)
+  active_zenkai_multiplier: number;
+  zenkai_attempts_left: number;
 }
 
 export interface QuestionRecord {
@@ -48,6 +52,28 @@ export interface QuestionRecord {
   options: unknown; // JSON field (نحوّلها لاحقاً إلى string[] عبر Zod في طبقة القراءة)
   correct_answer: string; // لا يُرسل للعميل
   difficulty_tier: number;
+}
+
+function requireEnv(name: string) {
+  const v = process.env[name];
+  if (!v) throw new Error(`Missing env var: ${name}`);
+  return v;
+}
+
+/**
+ * Superuser/Admin PB client (Server-only)
+ * - يستخدم فقط داخل Server Actions/Server Components لتنفيذ عمليات خلفية تتجاوز API Rules
+ * - لا يتم تمريره أبداً للعميل
+ */
+export async function createPBAdminClient() {
+  const pbUrl = requireEnv("NEXT_PUBLIC_PB_URL");
+  const email = requireEnv("PB_ADMIN_EMAIL");
+  const password = requireEnv("PB_ADMIN_PASSWORD");
+
+  const pb = new PocketBase(pbUrl);
+  await pb.collection("_superusers").authWithPassword(email, password);
+
+  return pb;
 }
 
 export interface LeaderboardRecord {

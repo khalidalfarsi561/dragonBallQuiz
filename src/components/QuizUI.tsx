@@ -72,7 +72,7 @@ export default function QuizUI(props: {
                 <h1 className="text-xl font-extrabold">اختبار دراغون بول</h1>
                 <p className="mt-1 text-sm text-white/70">
                   مستوى طاقتك الحالي:
-                  <span className="ms-2 font-[var(--font-ibm-plex-arabic)]">
+                  <span className="ms-2 font-(--font-ibm-plex-arabic)">
                     {powerLevel.toLocaleString("ar")}
                   </span>
                 </p>

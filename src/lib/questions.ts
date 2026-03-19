@@ -1,8 +1,8 @@
 import "server-only";
 
-import PocketBase from "pocketbase";
 import { z } from "zod";
 import type { QuestionRecord } from "@/lib/pocketbase";
+import { createPBAdminClient } from "@/lib/pocketbase";
 import type { PublicQuestion } from "@/components/QuizUI";
 
 const optionsSchema = z.array(z.string().min(1)).min(2).max(8);
@@ -23,22 +23,6 @@ function toPublicQuestion(q: QuestionRecord): PublicQuestion | null {
  * يجلب سؤالاً واحداً بشكل آمن بدون إرسال correct_answer للعميل نهائياً.
  * نستخدم server-only + تحويل للـ PublicQuestion.
  */
-function requireEnv(name: string) {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing env var: ${name}`);
-  return v;
-}
-
-async function createPBAdminClient() {
-  const pbUrl = requireEnv("NEXT_PUBLIC_PB_URL");
-  const email = requireEnv("PB_ADMIN_EMAIL");
-  const password = requireEnv("PB_ADMIN_PASSWORD");
-
-  const pb = new PocketBase(pbUrl);
-  await pb.collection("_superusers").authWithPassword(email, password);
-  return pb;
-}
-
 /**
  * يجلب سؤالاً واحداً بشكل آمن:
  * - يتم الجلب عبر Superuser client (لأن collection مغلقة عن العامة)

@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import type { LeaderboardRecord, QuestionRecord, UserRecord } from "@/lib/pocketbase";
-import { createPBServerClient } from "@/lib/pocketbase";
+import { createPBAdminClient, createPBServerClient } from "@/lib/pocketbase";
 import {
   calculatePowerLevel,
   computeAwardedScore,
@@ -34,6 +34,7 @@ export async function submitAnswer(questionId: string, selectedOption: string, t
   }
 
   // 2) Authentication Verification (Server-side PB client per request)
+  //    نستخدمه فقط للتحقق من الجلسة واستخراج userId (بدون أي عمليات على collections المحمية)
   const pb = await createPBServerClient();
 
   if (!pb.authStore.isValid || !pb.authStore.record?.id) {
@@ -45,22 +46,23 @@ export async function submitAnswer(questionId: string, selectedOption: string, t
 
   const userId = pb.authStore.record.id;
 
-  // 3) Compare Answer (NEVER expose correct_answer to client)
-  const q = await pb
+  // 3) Admin client (يتجاوز API Rules بأمان داخل الخادم)
+  const adminPb = await createPBAdminClient();
+
+  // 4) Compare Answer (NEVER expose correct_answer to client)
+  const q = await adminPb
     .collection<QuestionRecord>("questions")
     .getOne(parsed.data.questionId, {
-      // safety: don't expand anything; keep minimal
-      requestKey: `q_${parsed.data.questionId}`,
+      requestKey: `q_${parsed.data.questionId}_admin`,
     });
 
   const isCorrect = parsed.data.selectedOption === q.correct_answer;
 
-  // 4) Update leaderboard securely on server
-  // - record per user in leaderboard (enforced by app logic)
+  // 5) Update leaderboard securely on server (admin)
   let leaderboard: LeaderboardRecord | null = null;
 
   try {
-    leaderboard = await pb
+    leaderboard = await adminPb
       .collection<LeaderboardRecord>("leaderboard")
       .getFirstListItem(`user="${userId}"`, { requestKey: `lb_${userId}` });
   } catch {
@@ -68,7 +70,7 @@ export async function submitAnswer(questionId: string, selectedOption: string, t
   }
 
   if (!leaderboard) {
-    leaderboard = await pb.collection<LeaderboardRecord>("leaderboard").create({
+    leaderboard = await adminPb.collection<LeaderboardRecord>("leaderboard").create({
       user: userId,
       score: 0,
       streak: 0,
@@ -89,20 +91,27 @@ export async function submitAnswer(questionId: string, selectedOption: string, t
   // Base score can later vary by difficulty, speed, etc.
   const baseScore = 10;
 
-  // Pull user's current power/zenkai fields from auth record (fallbacks)
-  // NOTE: We'll keep it defensive; missing fields default to 0.
-  const currentPowerLevel = Number((pb.authStore.record as unknown as Partial<UserRecord>)?.power_level ?? 0);
-  const currentZenkaiBoosts = Number((pb.authStore.record as unknown as Partial<UserRecord>)?.zenkai_boosts ?? 0);
+  // Pull user data from DB via admin (to support locked-down rules + zenkai persistence)
+  const user = await adminPb.collection<UserRecord>("users").getOne(userId, {
+    requestKey: `u_${userId}`,
+  });
+
+  const currentPowerLevel = Number(user.power_level ?? 0);
+  const currentZenkaiBoosts = Number(user.zenkai_boosts ?? 0);
+
+  const currentZenkai: ZenkaiState | null =
+    Number(user.zenkai_attempts_left ?? 0) > 0
+      ? {
+          multiplier: Number(user.active_zenkai_multiplier ?? 0),
+          remainingAttempts: Number(user.zenkai_attempts_left ?? 0),
+        }
+      : null;
 
   // Simple streak transition
   const prevStreak = lb.streak ?? 0;
   const nextStreak = isCorrect ? prevStreak + 1 : 0;
 
-  // For now, we don't persist consecutiveWrong; we infer zenkai activation when streak is lost
-  // and we store only the activation count in `zenkai_boosts`.
-  const currentZenkai: ZenkaiState | null = null;
-
-  // Evaluate zenkai activation (basic version based on streak loss)
+  // Evaluate zenkai activation (with persistence)
   const zenkaiEval = evaluateZenkai({
     wasCorrect: isCorrect,
     prevStreak,
@@ -119,12 +128,12 @@ export async function submitAnswer(questionId: string, selectedOption: string, t
 
   // Update leaderboard with awardedScore / nextStreak
   if (isCorrect) {
-    await pb.collection<LeaderboardRecord>("leaderboard").update(lb.id, {
+    await adminPb.collection<LeaderboardRecord>("leaderboard").update(lb.id, {
       score: (lb.score ?? 0) + awardedScore,
       streak: nextStreak,
     });
   } else {
-    await pb.collection<LeaderboardRecord>("leaderboard").update(lb.id, {
+    await adminPb.collection<LeaderboardRecord>("leaderboard").update(lb.id, {
       streak: 0,
     });
   }
@@ -144,9 +153,12 @@ export async function submitAnswer(questionId: string, selectedOption: string, t
 
   // Persist power level, and increment zenkai_boosts when activated
   // IMPORTANT: this is server-side update; user should not be allowed to update power_level directly via rules.
-  await pb.collection<UserRecord>("users").update(userId, {
+  await adminPb.collection<UserRecord>("users").update(userId, {
     power_level: nextPowerLevel,
     zenkai_boosts: currentZenkaiBoosts + (zenkaiEval.zenkaiActivated ? 1 : 0),
+
+    active_zenkai_multiplier: zenkaiEval.nextZenkai?.multiplier ?? 0,
+    zenkai_attempts_left: zenkaiEval.nextZenkai?.remainingAttempts ?? 0,
   } satisfies Partial<UserRecord>);
 
   // 5) Return minimal safe payload
