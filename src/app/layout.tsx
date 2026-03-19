@@ -1,17 +1,24 @@
 import type { Metadata } from "next";
-import { Cairo, IBM_Plex_Sans_Arabic } from "next/font/google";
+import { Cairo, Noto_Sans_Arabic } from "next/font/google";
 import "./globals.css";
 
-const cairo = Cairo({
-  variable: "--font-cairo",
+/**
+ * القراءة/النصوص الأساسية: Noto Sans Arabic (واضح جداً للنصوص الطويلة والأسئلة)
+ * العناوين الكبيرة/لوحة الصدارة: Cairo Black كبديل عند عدم توفر خط تراثي محلي
+ *
+ * ملاحظة: الخط التراثي (مثل Turban Genie / Kufi) يُفترض توفره محلياً/ذاتياً عبر CSS،
+ * ونجهّز له CSS Variable لاستخدامه حصراً في العناوين عند توفره.
+ */
+const notoSansArabic = Noto_Sans_Arabic({
+  variable: "--font-ar-body",
   subsets: ["arabic"],
-  weight: ["200", "300", "400", "500", "600", "700", "800", "900"],
+  weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"],
 });
 
-const ibmPlexArabic = IBM_Plex_Sans_Arabic({
-  variable: "--font-ibm-plex-arabic",
+const cairo = Cairo({
+  variable: "--font-ar-display-fallback",
   subsets: ["arabic"],
-  weight: ["100", "200", "300", "400", "500", "600", "700"],
+  weight: ["900"], // Black للعناوين الضخمة
 });
 
 const siteUrl = new URL("http://localhost:3000");
@@ -59,9 +66,27 @@ export default function RootLayout({
       lang="ar"
       dir="rtl"
       suppressHydrationWarning
-      className={`${cairo.variable} ${ibmPlexArabic.variable} h-full antialiased`}
+      className={[
+        // body font
+        notoSansArabic.variable,
+        // display fallback
+        cairo.variable,
+        // custom local display font (if provided in CSS)
+        "h-full antialiased",
+      ].join(" ")}
     >
-      <body suppressHydrationWarning className="min-h-full flex flex-col font-sans">
+      <body
+        suppressHydrationWarning
+        className={[
+          "min-h-full flex flex-col",
+          // default reading font
+          "font-(--font-ar-body)",
+          // Expose display font stack:
+          // - --font-ar-display: expected to be defined in globals.css as a local font-family name
+          // - fallback to Cairo Black when not defined
+          "[--font-ar-display:var(--font-ar-display,var(--font-ar-display-fallback))]",
+        ].join(" ")}
+      >
         {children}
       </body>
     </html>

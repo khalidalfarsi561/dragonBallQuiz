@@ -1,4 +1,3 @@
-import "server-only";
 
 import PocketBase from "pocketbase";
 import { cookies } from "next/headers";
@@ -67,6 +66,26 @@ export interface UserRecord {
   // Zenkai persistence (stored in DB)
   active_zenkai_multiplier: number;
   zenkai_attempts_left: number;
+
+  // --- RPG / Skill Tree / Daily Quests ---
+  skill_points: number;
+
+  /**
+   * JSON field:
+   * مثال: ["kamehameha", "instant_transmission"]
+   */
+  unlocked_skills: unknown;
+
+  /**
+   * JSON field:
+   * مثال: { "date": "2026-03-20", "quests": [...] }
+   */
+  daily_quests: unknown;
+
+  /**
+   * Text field (YYYY-MM-DD) لتتبع تسجيل الدخول اليومي.
+   */
+  last_login: string;
 }
 
 export interface QuestionRecord {

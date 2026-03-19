@@ -10,6 +10,39 @@ import {
   type DifficultyTier,
   type ZenkaiState,
 } from "@/lib/gamification";
+import { updateDailyQuestsOnAnswer } from "@/lib/quests-and-skills";
+
+/**
+ * ---- Rate Limiting (In-Memory / Server Action scope) ----
+ * الهدف: منع brute-force / spam clicks (أكثر من إجابة كل ثانيتين لكل مستخدم).
+ *
+ * ملاحظة: هذا تقييد "أفضل جهد" داخل الذاكرة في بيئة Node runtime.
+ * عند التشغيل على Serverless متعدد الـ instances قد يحتاج إلى Redis،
+ * لكن هذا يحقق مطلب الحماية الحالي بدون إضافة بنية تحتية إضافية.
+ */
+const answerRateLimit = new Map<string, number>();
+const RATE_LIMIT_WINDOW_MS = 2_000;
+
+function checkAndTouchRateLimit(userId: string) {
+  const now = Date.now();
+  const last = answerRateLimit.get(userId) ?? 0;
+
+  if (now - last < RATE_LIMIT_WINDOW_MS) {
+    return { ok: false as const, message: "أنت سريع جداً، يرجى الانتظار!" };
+  }
+
+  answerRateLimit.set(userId, now);
+
+  // تنظيف بسيط لمنع نمو الذاكرة
+  // (يعمل بشكل احتمالي عند كل طلب)
+  if (answerRateLimit.size > 10_000) {
+    for (const [k, ts] of answerRateLimit) {
+      if (now - ts > 60_000) answerRateLimit.delete(k);
+    }
+  }
+
+  return { ok: true as const };
+}
 
 const submitAnswerSchema = z.object({
   questionId: z
@@ -51,6 +84,16 @@ export async function submitAnswer(
   }
 
   const userId = pb.authStore.record.id;
+
+  // ---- Rate Limiting (after auth) ----
+  const rl = checkAndTouchRateLimit(userId);
+  if (!rl.ok) {
+    return {
+      isCorrect: false,
+      message: rl.message,
+      newPowerLevel: 0,
+    };
+  }
 
   // 3) Admin client (يتجاوز API Rules بأمان داخل الخادم)
   const adminPb = await createPBAdminClient();
@@ -158,6 +201,34 @@ export async function submitAnswer(
     nextStreak,
     awardedScore,
   });
+
+  // ---- Daily Quests & Skill Points (silent background update) ----
+  // هذه العملية لا تؤثر على الاستجابة الأساسية. نُشغّلها بدون تعطيل (fire-and-forget).
+  // IMPORTANT: نستخدم adminPb فقط داخل الخادم مع بقاء آليات الأمان الحالية.
+  try {
+    const questUpdate = updateDailyQuestsOnAnswer({
+      dailyQuests: user.daily_quests,
+      lastLogin: user.last_login,
+      wasCorrect: isCorrect,
+      nextStreak,
+    });
+
+    if (questUpdate.earnedSkillPoints > 0 || user.last_login !== questUpdate.lastLoginToStore) {
+      void adminPb.collection<UserRecord>("users").update(userId, {
+        skill_points: Number(user.skill_points ?? 0) + questUpdate.earnedSkillPoints,
+        daily_quests: questUpdate.nextDailyQuests as unknown,
+        last_login: questUpdate.lastLoginToStore,
+      } satisfies Partial<UserRecord>);
+    } else {
+      // حتى بدون مكافآت، نحدّث daily_quests إذا كان تقدم المهام تغيّر
+      void adminPb.collection<UserRecord>("users").update(userId, {
+        daily_quests: questUpdate.nextDailyQuests as unknown,
+        last_login: questUpdate.lastLoginToStore,
+      } satisfies Partial<UserRecord>);
+    }
+  } catch {
+    // تجاهل أي خطأ هنا لضمان عدم كسر submitAnswer
+  }
 
   // Persist power level, and increment zenkai_boosts when activated
   // IMPORTANT: this is server-side update; user should not be allowed to update power_level directly via rules.

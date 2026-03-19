@@ -19,10 +19,14 @@
 | `active_zenkai_multiplier` | Number | نعم | `0` | مضاعف الزنكاي الحالي (مثال: 0.2 = +20%) |
 | `zenkai_attempts_left` | Number | نعم | `0` | عدد المحاولات المتبقية للاستفادة من الزنكاي |
 | `current_form` | Text | نعم | `Base` | الشكل الحالي (مثل: Base / SSJ / SSJ2 ...) |
+| `skill_points` | Number | نعم | `0` | نقاط المهارة المكتسبة (RPG) |
+| `unlocked_skills` | JSON | لا | `{}` أو `[]` | مهارات مفتوحة (مثال: `["kamehameha"]`) |
+| `daily_quests` | JSON | لا | `{}` | تقدم المهام اليومية (يُدار من الخادم) |
+| `last_login` | Text | لا | `""` | تاريخ آخر تسجيل دخول (YYYY-MM-DD) لتتبع اليوميات |
 
 ### ملاحظة أمنية (قاعدة API لمنع التلاعب)
 
-**هدف القاعدة:** منع المستخدم من تعديل `power_level` (وأي حقول حساسة مشابهة) مباشرة من العميل.
+**هدف القاعدة:** منع المستخدم من تعديل `power_level` و `skill_points` و `unlocked_skills` و `daily_quests` و `last_login` (وأي حقول حساسة مشابهة) مباشرة من العميل.
 
 اقتراح قواعد PocketBase (Pseudo Rules) — اضبطها من لوحة القواعد:
 
