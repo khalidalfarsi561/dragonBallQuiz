@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-/* eslint-disable */
 import QuizCard from "@/components/QuizCard";
 import Leaderboard from "@/components/Leaderboard";
 import SharePowerButton from "@/components/SharePowerButton";
@@ -19,12 +18,14 @@ type Feedback = "idle" | "correct" | "wrong";
 
 export default function QuizUI(props: {
   question: PublicQuestion | null;
-  initialPowerLevel?: number;
+
+  username: string;
+  powerLevel: number;
   avatarSrc?: string;
 }) {
-  const { question, avatarSrc = "/vercel.svg", initialPowerLevel = 1_050_000 } = props;
+  const { question, username, powerLevel: powerLevelProp, avatarSrc = "/vercel.svg" } = props;
 
-  const [powerLevel, setPowerLevel] = useState<number>(initialPowerLevel);
+  const [powerLevel, setPowerLevel] = useState<number>(powerLevelProp);
   const [feedback, setFeedback] = useState<Feedback>("idle");
   const [message, setMessage] = useState<string>("");
   const [pending, startTransition] = useTransition();
@@ -36,6 +37,11 @@ export default function QuizUI(props: {
     // effect is the right place for impure values like Date.now()
     questionStartRef.current = Date.now();
   }, [question?.id]);
+
+  useEffect(() => {
+    // keep in sync when server provides updated value after refresh
+    setPowerLevel(powerLevelProp);
+  }, [powerLevelProp]);
 
   const onPick = (selectedOption: string) => {
     if (!question || pending) return;
@@ -69,7 +75,7 @@ export default function QuizUI(props: {
             <div className="flex items-center gap-4">
               <UserAvatar src={avatarSrc} alt="User" powerLevel={powerLevel} size={84} />
               <div>
-                <h1 className="text-xl font-extrabold">اختبار دراغون بول</h1>
+                <h1 className="text-xl font-extrabold">مرحباً {username}</h1>
                 <p className="mt-1 text-sm text-white/70">
                   مستوى طاقتك الحالي:
                   <span className="ms-2 font-(--font-ibm-plex-arabic)">

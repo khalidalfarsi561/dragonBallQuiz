@@ -64,17 +64,18 @@ export async function submitAnswer(questionId: string, selectedOption: string, t
   try {
     leaderboard = await adminPb
       .collection<LeaderboardRecord>("leaderboard")
-      .getFirstListItem(`user="${userId}"`, { requestKey: `lb_${userId}` });
+      .getFirstListItem(`user_id="${userId}"`, { requestKey: `lb_${userId}` });
   } catch {
     leaderboard = null;
   }
 
   if (!leaderboard) {
+    // PocketBase schema uses field name `user_id` (relation) not `user`
     leaderboard = await adminPb.collection<LeaderboardRecord>("leaderboard").create({
-      user: userId,
+      user_id: userId,
       score: 0,
       streak: 0,
-    } satisfies Partial<LeaderboardRecord>);
+    } as unknown as Partial<LeaderboardRecord>);
   }
 
   // Type-narrowing safety

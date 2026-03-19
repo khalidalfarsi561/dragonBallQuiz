@@ -6,9 +6,14 @@ import { useEffect, useMemo, useState } from "react";
 
 type LeaderboardRow = {
   id: string;
-  user: string; // user record id
+  userId: string;
+  username: string;
   score: number;
   streak: number;
+};
+
+type LeaderboardUserExpand = {
+  username?: string;
 };
 
 type LeaderboardItem = {
@@ -16,6 +21,9 @@ type LeaderboardItem = {
   user: string;
   score?: number;
   streak?: number;
+  expand?: {
+    user?: LeaderboardUserExpand;
+  };
 };
 
 type PBListResult<T> = {
@@ -36,12 +44,14 @@ export default function Leaderboard() {
   async function loadInitial() {
     const list = (await pb.collection("leaderboard").getList(1, 20, {
       sort: "-score,-streak,created",
+      expand: "user",
       requestKey: "leaderboard_initial",
     })) as PBListResult<LeaderboardItem>;
 
     const mapped: LeaderboardRow[] = list.items.map((it) => ({
       id: it.id,
-      user: it.user,
+      userId: it.user,
+      username: it.expand?.user?.username ?? `لاعب #${it.user.slice(0, 6)}`,
       score: Number(it.score ?? 0),
       streak: Number(it.streak ?? 0),
     }));
@@ -96,7 +106,7 @@ export default function Leaderboard() {
                 </div>
 
                 <div className="text-white/90">
-                  <div className="text-sm font-semibold">لاعب #{r.user.slice(0, 6)}</div>
+                  <div className="text-sm font-semibold">{r.username}</div>
                   <div className="text-xs text-white/60">Streak: {r.streak}</div>
                 </div>
               </div>

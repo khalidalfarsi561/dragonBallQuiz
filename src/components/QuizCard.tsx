@@ -25,7 +25,7 @@ export default function QuizCard({ title, children, feedback = "idle" }: QuizCar
     }
 
     if (feedback === "correct") {
-      // Smooth slide in + gentle scale
+      // Smooth slide in + gentle scale (keyframes => use tween in transition below)
       return {
         x: [0, 14, 0],
         y: [0, -4, 0],
@@ -48,11 +48,11 @@ export default function QuizCard({ title, children, feedback = "idle" }: QuizCar
     }
 
     if (feedback === "correct") {
+      // keyframes arrays لا تعمل مع spring (يدعم فقط keyframeين)
       return {
-        type: "spring",
-        stiffness: 320,
-        damping: 26,
-        mass: 0.9,
+        type: "tween",
+        duration: 0.45,
+        ease: "easeOut",
       } as const;
     }
 
