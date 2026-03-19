@@ -40,6 +40,8 @@ export default function AuthModal() {
     });
   };
 
+  const submitLabel = pending ? "..." : mode === "signin" ? "دخول" : "إنشاء حساب";
+
   return (
     <div className="flex flex-1 items-center justify-center bg-zinc-950 px-6 py-10 text-white">
       <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-md">
@@ -69,7 +71,13 @@ export default function AuthModal() {
           </button>
         </div>
 
-        <div className="mt-4 space-y-3">
+        <form
+          className="mt-4 space-y-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            onSubmit();
+          }}
+        >
           {mode === "signup" ? (
             <div>
               <label className="mb-1 block text-xs text-white/70">اسم المستخدم</label>
@@ -78,6 +86,8 @@ export default function AuthModal() {
                 onChange={(e) => setUsername(e.target.value)}
                 className="w-full rounded-xl border border-white/10 bg-black/25 px-4 py-3 text-sm outline-none focus:border-white/25"
                 placeholder="مثال: GokuFan"
+                autoComplete="username"
+                required
               />
             </div>
           ) : null}
@@ -90,6 +100,9 @@ export default function AuthModal() {
               className="w-full rounded-xl border border-white/10 bg-black/25 px-4 py-3 text-sm outline-none focus:border-white/25"
               placeholder="you@example.com"
               inputMode="email"
+              type="email"
+              autoComplete="email"
+              required
             />
           </div>
 
@@ -101,16 +114,17 @@ export default function AuthModal() {
               className="w-full rounded-xl border border-white/10 bg-black/25 px-4 py-3 text-sm outline-none focus:border-white/25"
               placeholder="••••••••"
               type="password"
+              autoComplete={mode === "signin" ? "current-password" : "new-password"}
+              required
             />
           </div>
 
           <button
-            type="button"
+            type="submit"
             disabled={pending}
-            onClick={onSubmit}
             className="mt-2 w-full rounded-xl bg-white/15 px-4 py-3 text-sm font-bold text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {pending ? "..." : mode === "signin" ? "دخول" : "إنشاء حساب"}
+            {submitLabel}
           </button>
 
           {message ? <p className="text-sm text-white/80">{message}</p> : null}
@@ -118,7 +132,7 @@ export default function AuthModal() {
           <p className="text-xs text-white/50">
             ملاحظة: سيتم حفظ الجلسة في Cookies تلقائياً عبر PocketBase/Next.js لتعمل SSR بشكل صحيح.
           </p>
-        </div>
+        </form>
       </div>
     </div>
   );

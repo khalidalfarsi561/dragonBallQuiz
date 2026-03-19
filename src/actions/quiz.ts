@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { getKV } from "@/lib/kv";
 import type { LeaderboardRecord, QuestionRecord, UserRecord } from "@/lib/pocketbase";
 import { createPBAdminClient, createPBServerClient } from "@/lib/pocketbase";
 import {
@@ -11,39 +12,30 @@ import {
   type ZenkaiState,
 } from "@/lib/gamification";
 import { updateDailyQuestsOnAnswer } from "@/lib/quests-and-skills";
+import { verifyQuizQuestionToken } from "@/lib/quiz-session";
+import { markNonceUsedOrReject } from "@/lib/anti-replay";
 
 /**
- * ---- Rate Limiting (In-Memory / Server Action scope) ----
- * الهدف: منع brute-force / spam clicks (أكثر من إجابة كل ثانيتين لكل مستخدم).
+ * ---- Rate Limiting ----
+ * هدف: منع brute-force / spam clicks.
  *
- * ملاحظة: هذا تقييد "أفضل جهد" داخل الذاكرة في بيئة Node runtime.
- * عند التشغيل على Serverless متعدد الـ instances قد يحتاج إلى Redis،
- * لكن هذا يحقق مطلب الحماية الحالي بدون إضافة بنية تحتية إضافية.
+ * Uses shared KV when configured (Upstash Redis REST), falls back to in-memory KV in dev.
  */
-const answerRateLimit = new Map<string, number>();
 const RATE_LIMIT_WINDOW_MS = 2_000;
 
-/**
- * TODO: Replace in-memory Map with Vercel KV (Redis) for production rate limiting
- * to support horizontal scaling in Serverless environments.
- */
-function checkAndTouchRateLimit(userId: string) {
+async function checkAndTouchRateLimit(userId: string) {
   const now = Date.now();
-  const last = answerRateLimit.get(userId) ?? 0;
+  const kv = await getKV();
+  const key = `quiz:rl:${userId}`;
 
-  if (now - last < RATE_LIMIT_WINDOW_MS) {
+  const lastStr = await kv.get(key);
+  const last = lastStr ? Number(lastStr) : 0;
+
+  if (Number.isFinite(last) && now - last < RATE_LIMIT_WINDOW_MS) {
     return { ok: false as const, message: "أنت سريع جداً، يرجى الانتظار!" };
   }
 
-  answerRateLimit.set(userId, now);
-
-  // تنظيف بسيط لمنع نمو الذاكرة
-  // (يعمل بشكل احتمالي عند كل طلب)
-  if (answerRateLimit.size > 10_000) {
-    for (const [k, ts] of answerRateLimit) {
-      if (now - ts > 60_000) answerRateLimit.delete(k);
-    }
-  }
+  await kv.set(key, String(now), { exMs: RATE_LIMIT_WINDOW_MS + 10_000 });
 
   return { ok: true as const };
 }
@@ -56,22 +48,32 @@ const submitAnswerSchema = z.object({
     .regex(/^[a-z0-9]+$/i, "معرّف السؤال غير صالح"),
   selectedOption: z.string().min(1).max(512),
 
-  // Optional for power-level feeling (measured client-side later)
+  // Server-signed token: binds questionId + issuedAt to prevent time cheating + replay
+  questionToken: z.string().min(10).max(4096),
+
+  // Optional: client-side only (UX). We DO NOT trust it for scoring.
   timeMs: z.number().int().min(0).max(120_000).optional(),
 });
 
 export async function submitAnswer(
   questionId: string,
   selectedOption: string,
+  questionToken: string | null,
   timeMs?: number
-): Promise<{ isCorrect: boolean; message: string; newPowerLevel: number }> {
+): Promise<{
+  isCorrect: boolean;
+  message: string;
+  newPowerLevel: number;
+  correctOption: string;
+}> {
   // 1) Input Validation (Zod)
-  const parsed = submitAnswerSchema.safeParse({ questionId, selectedOption, timeMs });
+  const parsed = submitAnswerSchema.safeParse({ questionId, selectedOption, questionToken, timeMs });
   if (!parsed.success) {
     return {
       isCorrect: false,
       message: "مدخلات غير صالحة.",
       newPowerLevel: 0,
+      correctOption: "",
     };
   }
 
@@ -84,18 +86,56 @@ export async function submitAnswer(
       isCorrect: false,
       message: "يجب تسجيل الدخول للإجابة.",
       newPowerLevel: 0,
+      correctOption: "",
     };
   }
 
   const userId = pb.authStore.record.id;
 
+  // ---- Verify question token (anti-cheat + anti-replay binding) ----
+  const tokenCheck = verifyQuizQuestionToken(parsed.data.questionToken);
+  if (!tokenCheck.ok) {
+    return {
+      isCorrect: false,
+      message: "انتهت صلاحية السؤال أو أن الطلب غير صالح.",
+      newPowerLevel: 0,
+      correctOption: "",
+    };
+  }
+
+  if (tokenCheck.payload.userId !== userId || tokenCheck.payload.questionId !== parsed.data.questionId) {
+    return {
+      isCorrect: false,
+      message: "طلب غير مصرح به.",
+      newPowerLevel: 0,
+      correctOption: "",
+    };
+  }
+
+  const replay = await markNonceUsedOrReject({
+    userId,
+    questionId: parsed.data.questionId,
+    nonce: tokenCheck.payload.nonce,
+    expiresAtMs: tokenCheck.payload.expiresAtMs,
+  });
+
+  if (!replay.ok) {
+    return {
+      isCorrect: false,
+      message: "تم إرسال هذه الإجابة مسبقاً (محاولة مكررة).",
+      newPowerLevel: 0,
+      correctOption: "",
+    };
+  }
+
   // ---- Rate Limiting (after auth) ----
-  const rl = checkAndTouchRateLimit(userId);
+  const rl = await checkAndTouchRateLimit(userId);
   if (!rl.ok) {
     return {
       isCorrect: false,
       message: rl.message,
       newPowerLevel: 0,
+      correctOption: "",
     };
   }
 
@@ -103,11 +143,7 @@ export async function submitAnswer(
   const adminPb = await createPBAdminClient();
 
   // 4) Compare Answer (NEVER expose correct_answer to client)
-  const q = await adminPb
-    .collection<QuestionRecord>("questions")
-    .getOne(parsed.data.questionId, {
-      requestKey: `q_${parsed.data.questionId}_admin`,
-    });
+  const q = await adminPb.collection<QuestionRecord>("questions").getOne(parsed.data.questionId);
 
   const isCorrect = parsed.data.selectedOption === q.correct_answer;
 
@@ -115,20 +151,23 @@ export async function submitAnswer(
   let leaderboard: LeaderboardRecord | null = null;
 
   try {
-    leaderboard = await adminPb
-      .collection<LeaderboardRecord>("leaderboard")
-      .getFirstListItem(`user_id="${userId}"`, { requestKey: `lb_${userId}` });
+    leaderboard = await adminPb.collection<LeaderboardRecord>("leaderboard").getFirstListItem(`user_id="${userId}"`);
   } catch {
     leaderboard = null;
   }
 
+  type LeaderboardCreatePayload = Omit<LeaderboardRecord, "id" | "collectionId" | "collectionName" | "created" | "updated">;
+
   if (!leaderboard) {
     // PocketBase schema uses field name `user_id` (relation) not `user`
-    leaderboard = await adminPb.collection<LeaderboardRecord>("leaderboard").create({
+    const createPayload: LeaderboardCreatePayload = {
       user_id: userId,
       score: 0,
       streak: 0,
-    } as unknown as Partial<LeaderboardRecord>);
+      consecutive_wrong: 0,
+    };
+
+    leaderboard = await adminPb.collection<LeaderboardRecord>("leaderboard").create(createPayload);
   }
 
   // Type-narrowing safety
@@ -139,6 +178,7 @@ export async function submitAnswer(
       isCorrect: false,
       message: "حدث خطأ غير متوقع. حاول مرة أخرى.",
       newPowerLevel: 0,
+      correctOption: "",
     };
   }
 
@@ -147,9 +187,7 @@ export async function submitAnswer(
   const baseScore = 10;
 
   // Pull user data from DB via admin (to support locked-down rules + zenkai persistence)
-  const user = await adminPb.collection<UserRecord>("users").getOne(userId, {
-    requestKey: `u_${userId}`,
-  });
+  const user = await adminPb.collection<UserRecord>("users").getOne(userId);
 
   const currentPowerLevel = Number(user.power_level ?? 0);
   const currentZenkaiBoosts = Number(user.zenkai_boosts ?? 0);
@@ -166,13 +204,16 @@ export async function submitAnswer(
   const prevStreak = lb.streak ?? 0;
   const nextStreak = isCorrect ? prevStreak + 1 : 0;
 
+  const prevConsecutiveWrong = lb.consecutive_wrong ?? 0;
+  const nextConsecutiveWrong = isCorrect ? 0 : prevConsecutiveWrong + 1;
+
   // Evaluate zenkai activation (with persistence)
   const zenkaiEval = evaluateZenkai({
     wasCorrect: isCorrect,
     prevStreak,
     nextStreak,
-    prevConsecutiveWrong: isCorrect ? 0 : 1,
-    nextConsecutiveWrong: isCorrect ? 0 : 2,
+    prevConsecutiveWrong,
+    nextConsecutiveWrong,
     currentZenkai,
   });
 
@@ -186,16 +227,21 @@ export async function submitAnswer(
     await adminPb.collection<LeaderboardRecord>("leaderboard").update(lb.id, {
       score: (lb.score ?? 0) + awardedScore,
       streak: nextStreak,
+      consecutive_wrong: nextConsecutiveWrong,
     });
   } else {
     await adminPb.collection<LeaderboardRecord>("leaderboard").update(lb.id, {
       streak: 0,
+      consecutive_wrong: nextConsecutiveWrong,
     });
   }
 
-  // Calculate power level (difficulty from question, time from client if provided)
+  // Calculate power level (difficulty from question, time measured server-side from token issuance)
   const difficultyTier = (q.difficulty_tier ?? 1) as DifficultyTier;
-  const safeTimeMs = typeof parsed.data.timeMs === "number" ? parsed.data.timeMs : 10_000;
+  const safeTimeMs = Math.min(
+    Math.max(Date.now() - tokenCheck.payload.issuedAtMs, 0),
+    120_000
+  );
 
   const nextPowerLevel = calculatePowerLevel({
     currentPowerLevel,
@@ -230,8 +276,8 @@ export async function submitAnswer(
         last_login: questUpdate.lastLoginToStore,
       } satisfies Partial<UserRecord>);
     }
-  } catch {
-    // تجاهل أي خطأ هنا لضمان عدم كسر submitAnswer
+  } catch (error) {
+    console.error("[Quest Update Error]:", error);
   }
 
   // Persist power level, and increment zenkai_boosts when activated
@@ -245,9 +291,11 @@ export async function submitAnswer(
   } satisfies Partial<UserRecord>);
 
   // 5) Return minimal safe payload
+  // NOTE: correctOption is returned only AFTER answer submission to allow UI to highlight it.
   return {
     isCorrect,
     message: isCorrect ? "إجابة صحيحة! أحسنت." : "إجابة خاطئة. حاول مرة أخرى.",
     newPowerLevel: nextPowerLevel,
+    correctOption: q.correct_answer,
   };
 }

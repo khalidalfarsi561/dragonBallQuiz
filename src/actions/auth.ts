@@ -9,12 +9,6 @@ type NewUserPayload = {
   email: string;
   password: string;
   passwordConfirm: string;
-
-  power_level: number;
-  zenkai_boosts: number;
-  current_form: string;
-  active_zenkai_multiplier: number;
-  zenkai_attempts_left: number;
 };
 
 const signInSchema = z.object({
@@ -51,12 +45,6 @@ export async function signUp(username: string, email: string, password: string) 
     email: parsed.data.email,
     password: parsed.data.password,
     passwordConfirm: parsed.data.password,
-
-    power_level: 0,
-    zenkai_boosts: 0,
-    current_form: "Base",
-    active_zenkai_multiplier: 0,
-    zenkai_attempts_left: 0,
   };
 
   await pb.collection<UserRecord>("users").create(payload as unknown as Partial<UserRecord>);

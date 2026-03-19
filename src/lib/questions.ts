@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { QuestionRecord } from "@/lib/pocketbase";
 import { createPBAdminClient } from "@/lib/pocketbase";
 import type { PublicQuestion } from "@/components/QuizUI";
+import { createQuizQuestionToken } from "@/lib/quiz-session";
 
 const optionsSchema = z.array(z.string().min(1)).min(2).max(8);
 
@@ -42,4 +43,18 @@ export async function getOnePublicQuestion(): Promise<PublicQuestion | null> {
   // خطوة أمنية: حتى لو وصل الحقل من PB، لن نُرجعه أبداً للعميل
   // (نحوّل فقط إلى PublicQuestion)
   return toPublicQuestion(first);
+}
+
+/**
+ * Fetch a question + a server-signed token that binds (userId, questionId, issuedAt).
+ * This token must be sent back to `submitAnswer` to:
+ * - compute time server-side (no client cheating)
+ * - prevent replaying answers for the same question (nonce)
+ */
+export async function getQuestionForUser(userId: string): Promise<{ question: PublicQuestion; token: string } | null> {
+  const q = await getOnePublicQuestion();
+  if (!q) return null;
+
+  const token = createQuizQuestionToken({ userId, questionId: q.id });
+  return { question: q, token };
 }

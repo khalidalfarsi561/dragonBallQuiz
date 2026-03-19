@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type React from "react";
 import { useRouter } from "next/navigation";
 import QuizCard from "@/components/QuizCard";
@@ -17,8 +17,11 @@ export type PublicQuestion = {
 
 type Feedback = "idle" | "correct" | "wrong";
 
+type OptionState = "idle" | "selected" | "correct" | "revealed-correct" | "revealed-wrong";
+
 export default function QuizUI(props: {
   question: PublicQuestion | null;
+  questionToken: string | null;
 
   username: string;
   powerLevel: number;
@@ -26,7 +29,14 @@ export default function QuizUI(props: {
 
   leaderboardSlot?: React.ReactNode;
 }) {
-  const { question, username, powerLevel: powerLevelProp, avatarSrc = "/vercel.svg", leaderboardSlot } = props;
+  const {
+    question,
+    questionToken,
+    username,
+    powerLevel: powerLevelProp,
+    avatarSrc = "/vercel.svg",
+    leaderboardSlot,
+  } = props;
 
   const router = useRouter();
 
@@ -35,23 +45,75 @@ export default function QuizUI(props: {
   const [message, setMessage] = useState<string>("");
   const [hasAnswered, setHasAnswered] = useState(false);
   const [pending, startTransition] = useTransition();
+  const [selectedOption, setSelectedOption] = useState<string | null>(null);
+  const [pendingOption, setPendingOption] = useState<string | null>(null);
+  const [correctOption, setCorrectOption] = useState<string | null>(null);
 
   // Client-side timing (used فقط لإحساس السرعة)
   const questionStartRef = useRef<number>(0);
+  const timerRef = useRef<number | null>(null);
+  const [elapsedSec, setElapsedSec] = useState(0);
 
   useEffect(() => {
     // effect is the right place for impure values like Date.now()
     questionStartRef.current = Date.now();
+
+    setElapsedSec(0);
+    if (timerRef.current) {
+      window.clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+
+    // Timer UI (display only) - updates once per second
+    timerRef.current = window.setInterval(() => {
+      setElapsedSec(Math.floor((Date.now() - questionStartRef.current) / 1000));
+    }, 1000);
   }, [question?.id]);
+
+  useEffect(() => {
+    // stop timer after answering (to prevent extra rerenders)
+    if (hasAnswered && timerRef.current) {
+      window.clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  }, [hasAnswered]);
 
   useEffect(() => {
     // keep in sync when server provides updated value after refresh
     setPowerLevel(powerLevelProp);
   }, [powerLevelProp]);
 
-  const onPick = (selectedOption: string) => {
+  useEffect(() => {
+    // reset selection when question changes
+    setSelectedOption(null);
+    setPendingOption(null);
+    setCorrectOption(null);
+    setHasAnswered(false);
+    setFeedback("idle");
+    setMessage("");
+  }, [question?.id]);
+
+  const difficultyLabel = useMemo(() => {
+    const tier = question?.difficultyTier ?? 0;
+    if (tier <= 1) return { text: "سهل", className: "border-emerald-400/30 bg-emerald-500/10 text-emerald-100" };
+    if (tier === 2) return { text: "متوسط", className: "border-amber-400/30 bg-amber-500/10 text-amber-100" };
+    return { text: "صعب", className: "border-rose-400/30 bg-rose-500/10 text-rose-100" };
+  }, [question?.difficultyTier]);
+
+  const questionProgress = useMemo(() => {
+    // Progress "مبدئي" بدون تغييرات سيرفر:
+    // نستخدم اليوم/الأسبوع كإحساس تقدم، ويمكن استبداله لاحقًا بقيم حقيقية (index/total).
+    const day = new Date().getDate();
+    const total = 30;
+    const current = Math.min(Math.max(day, 1), total);
+    return { current, total, pct: Math.round((current / total) * 100) };
+  }, []);
+
+  const onPick = (opt: string) => {
     if (!question || pending || hasAnswered) return;
 
+    setSelectedOption(opt);
+    setPendingOption(opt);
     setHasAnswered(true);
 
     startTransition(async () => {
@@ -60,17 +122,22 @@ export default function QuizUI(props: {
       setFeedback("idle");
 
       try {
-        const res = await submitAnswer(question.id, selectedOption, timeMs);
+        const res = await submitAnswer(question.id, opt, questionToken, timeMs);
 
         setFeedback(res.isCorrect ? "correct" : "wrong");
         setMessage(res.message);
+        setCorrectOption(res.correctOption || null);
 
         // سيتم تحديثه بالقيمة الحقيقية القادمة من الخادم
         setPowerLevel(res.newPowerLevel);
       } catch {
         setHasAnswered(false);
         setFeedback("wrong");
-        setMessage("تعذر إرسال الإجابة. تأكد من تشغيل PocketBase وتسجيل الدخول.");
+        setMessage(
+          "تعذر إرسال الإجابة. تأكد من تشغيل PocketBase وتسجيل الدخول.",
+        );
+      } finally {
+        setPendingOption(null);
       }
     });
   };
@@ -81,7 +148,12 @@ export default function QuizUI(props: {
         <header className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-md">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <UserAvatar src={avatarSrc} alt="User" powerLevel={powerLevel} size={84} />
+              <UserAvatar
+                src={avatarSrc}
+                alt="User"
+                powerLevel={powerLevel}
+                size={84}
+              />
               <div>
                 <h1 className="text-xl font-extrabold">مرحباً {username}</h1>
                 <p className="mt-1 text-sm text-white/70">
@@ -101,27 +173,127 @@ export default function QuizUI(props: {
           <section className="flex flex-col gap-4">
             {!question ? (
               <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-white/70 backdrop-blur-md">
-                لا يوجد سؤال متاح حالياً. تأكد من إضافة أسئلة في PocketBase (Collection: questions).
+                لا يوجد سؤال متاح حالياً. تأكد من إضافة أسئلة في PocketBase
+                (Collection: questions).
               </div>
             ) : (
-              <QuizCard title="سؤال اليوم" feedback={feedback}>
-                <p className="mb-4 text-base font-semibold leading-7 text-white">{question.content}</p>
+              <QuizCard
+                title="سؤال اليوم"
+                feedback={feedback}
+                headerSlot={
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={[
+                        "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-bold",
+                        difficultyLabel.className,
+                      ].join(" ")}
+                      aria-label={`مستوى الصعوبة: ${difficultyLabel.text}`}
+                    >
+                      {difficultyLabel.text}
+                    </span>
+
+                    <span
+                      className="inline-flex items-center rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-xs font-bold text-white/90"
+                      aria-label={`الوقت: ${elapsedSec} ثانية`}
+                    >
+                      {elapsedSec}s
+                    </span>
+
+                    <span
+                      className="inline-flex items-center rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-xs font-bold text-white/90"
+                      aria-label={`التقدم: ${questionProgress.current} من ${questionProgress.total}`}
+                      title="تقدم مبدئي (سيستبدل لاحقاً بتقدم حقيقي من السيرفر)"
+                    >
+                      {questionProgress.current}/{questionProgress.total}
+                    </span>
+                  </div>
+                }
+              >
+                <p className="mb-4 text-base font-semibold leading-7 text-white">
+                  {question.content}
+                </p>
 
                 <div className="grid grid-cols-1 gap-3">
-                  {question.options.map((opt) => (
-                    <button
-                      key={opt}
-                      type="button"
-                      disabled={pending || hasAnswered}
-                      onClick={() => onPick(opt)}
-                      className="w-full rounded-xl border border-white/10 bg-white/10 px-4 py-3 text-start text-sm font-semibold text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {opt}
-                    </button>
-                  ))}
+                  {question.options.map((opt) => {
+                    const state: OptionState = !selectedOption
+                      ? "idle"
+                      : feedback === "idle"
+                        ? opt !== selectedOption
+                          ? "idle"
+                          : "selected"
+                        : feedback === "correct"
+                          ? opt === selectedOption
+                            ? "correct"
+                            : "idle"
+                          : // feedback === "wrong"
+                            opt === correctOption
+                            ? "revealed-correct"
+                            : opt === selectedOption
+                              ? "revealed-wrong"
+                              : "idle";
+
+                    const stateClass =
+                      state === "correct" || state === "revealed-correct"
+                        ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-50"
+                        : state === "revealed-wrong"
+                          ? "border-rose-400/40 bg-rose-500/15 text-rose-50"
+                          : state === "selected"
+                            ? "border-sky-400/30 bg-sky-500/10 text-white"
+                            : "border-white/10 bg-white/10 text-white";
+
+                    const isPendingThis = pending && pendingOption === opt;
+                    const isSelectedThis = opt === selectedOption;
+
+                    return (
+                      <button
+                        key={opt}
+                        type="button"
+                        disabled={pending || hasAnswered}
+                        onClick={() => onPick(opt)}
+                        className={[
+                          "relative w-full rounded-xl border px-4 py-3 text-start text-sm font-semibold transition",
+                          "wrap-break-word",
+                          stateClass,
+                          "hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-60",
+                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950",
+                        ].join(" ")}
+                      >
+                        <span className="flex items-center justify-between gap-3">
+                          <span className="min-w-0 flex-1 whitespace-normal leading-6">
+                            {opt}
+                          </span>
+
+                          <span className="flex h-5 w-5 items-center justify-center">
+                            {isPendingThis ? (
+                              <span
+                                className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white/80"
+                                aria-label="جاري الإرسال"
+                              />
+                            ) : feedback !== "idle" && isSelectedThis ? (
+                              <span
+                                className={[
+                                  "text-xs font-extrabold",
+                                  feedback === "correct" ? "text-emerald-300" : "text-rose-300",
+                                ].join(" ")}
+                                aria-hidden="true"
+                              >
+                                {feedback === "correct" ? "✓" : "✕"}
+                              </span>
+                            ) : null}
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
 
-                {message ? <p className="mt-4 text-sm text-white/80">{message}</p> : null}
+                <div className="mt-4 min-h-10">
+                  {message ? (
+                    <p className="text-sm text-white/80" aria-live="polite">
+                      {message}
+                    </p>
+                  ) : null}
+                </div>
 
                 {feedback !== "idle" ? (
                   <button
@@ -129,11 +301,12 @@ export default function QuizUI(props: {
                     disabled={pending}
                     onClick={() => {
                       router.refresh();
+                      setSelectedOption(null);
                       setHasAnswered(false);
                       setFeedback("idle");
                       setMessage("");
                     }}
-                    className="mt-4 w-full rounded-xl border border-white/10 bg-white/10 px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="mt-4 w-full rounded-xl border border-white/10 bg-white/10 px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950"
                   >
                     السؤال التالي
                   </button>

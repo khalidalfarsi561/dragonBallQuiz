@@ -10,6 +10,10 @@ import { cookies } from "next/headers";
 export async function createPBServerClient() {
   const pb = new PocketBase(process.env.NEXT_PUBLIC_PB_URL);
 
+  // Prevent PocketBase JS SDK auto-cancellation from bubbling as unhandledRejection
+  // in Next.js server environment (SSR / RSC / server actions).
+  pb.autoCancellation(false);
+
   const cookieStore = await cookies();
   const allCookies = cookieStore.getAll();
   const cookieString = allCookies.map((c) => `${c.name}=${c.value}`).join("; ");
@@ -25,7 +29,12 @@ export async function createPBServerClient() {
  */
 export async function syncPBAuthToCookies(pb: PocketBase) {
   const cookieStore = await cookies();
-  const cookie = pb.authStore.exportToCookie({ httpOnly: true, secure: false, sameSite: "lax", path: "/" });
+  const cookie = pb.authStore.exportToCookie({
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+  });
 
   // PocketBase may return multiple Set-Cookie lines separated by "\n"
   const parts = cookie.split("\n").map((s) => s.trim()).filter(Boolean);
@@ -41,7 +50,7 @@ export async function syncPBAuthToCookies(pb: PocketBase) {
     cookieStore.set(name, value, {
       httpOnly: true,
       sameSite: "lax",
-      secure: false,
+      secure: process.env.NODE_ENV === "production",
       path: "/",
     });
   }
@@ -118,6 +127,7 @@ export async function createPBAdminClient() {
   const password = requireEnv("PB_ADMIN_PASSWORD");
 
   const pb = new PocketBase(pbUrl);
+  pb.autoCancellation(false);
   await pb.collection("_superusers").authWithPassword(email, password);
 
   return pb;
@@ -133,4 +143,5 @@ export interface LeaderboardRecord {
   user_id: string; // Relation -> Users (record id)
   score: number;
   streak: number;
+  consecutive_wrong: number;
 }
