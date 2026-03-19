@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import type React from "react";
 import { useRouter } from "next/navigation";
 import QuizCard from "@/components/QuizCard";
-import Leaderboard from "@/components/Leaderboard";
 import SharePowerButton from "@/components/SharePowerButton";
 import UserAvatar from "@/components/UserAvatar";
 import { submitAnswer } from "@/actions/quiz";
@@ -23,8 +23,10 @@ export default function QuizUI(props: {
   username: string;
   powerLevel: number;
   avatarSrc?: string;
+
+  leaderboardSlot?: React.ReactNode;
 }) {
-  const { question, username, powerLevel: powerLevelProp, avatarSrc = "/vercel.svg" } = props;
+  const { question, username, powerLevel: powerLevelProp, avatarSrc = "/vercel.svg", leaderboardSlot } = props;
 
   const router = useRouter();
 
@@ -140,7 +142,7 @@ export default function QuizUI(props: {
             )}
           </section>
 
-          <Leaderboard />
+          {leaderboardSlot}
         </div>
       </main>
     </div>
