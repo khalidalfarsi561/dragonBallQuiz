@@ -12,7 +12,7 @@ import "./globals.css";
 const notoSansArabic = Noto_Sans_Arabic({
   variable: "--font-ar-body",
   subsets: ["arabic"],
-  weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"],
+  weight: ["400", "500", "600", "700", "800"],
 });
 
 const cairo = Cairo({

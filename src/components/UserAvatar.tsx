@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import Image from "next/image";
 
 type AuraTone = "yellow" | "red" | "blue" | "silver";
@@ -107,6 +107,8 @@ function seededParticles(seed: number, count: number, spread: number): Particle[
 export default function UserAvatar(props: { src: string; alt: string; powerLevel: number; size?: number }) {
   const { src, alt, powerLevel, size = 96 } = props;
 
+  const shouldReduceMotion = useReducedMotion();
+
   const tone = toneFromPowerLevel(powerLevel);
   const colors = auraColor(tone);
   const profile = particleProfile(tone);
@@ -173,9 +175,9 @@ export default function UserAvatar(props: { src: string; alt: string; powerLevel
               scale: [0.85, 1.0, 0.95],
             }}
             transition={{
-              duration: p.duration,
-              delay: p.delay,
-              repeat: Infinity,
+              duration: shouldReduceMotion ? 0 : p.duration,
+              delay: shouldReduceMotion ? 0 : p.delay,
+              repeat: shouldReduceMotion ? 0 : Infinity,
               ease: "easeOut",
             }}
           />

@@ -1,11 +1,14 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { signIn, signUp } from "@/actions/auth";
 
 type Mode = "signin" | "signup";
 
 export default function AuthModal() {
+  const router = useRouter();
+
   const [mode, setMode] = useState<Mode>("signin");
   const [pending, startTransition] = useTransition();
 
@@ -29,7 +32,7 @@ export default function AuthModal() {
 
         if (res.ok) {
           // Refresh server components so page.tsx can see updated cookies/session
-          window.location.reload();
+          await Promise.resolve(router.refresh());
         }
       } catch {
         setMessage("حدث خطأ. حاول مرة أخرى.");

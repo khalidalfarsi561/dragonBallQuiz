@@ -7,7 +7,6 @@ import { createPBServerClient } from "@/lib/pocketbase";
 import { getOnePublicQuestion } from "@/lib/questions";
 import { Suspense } from "react";
 
-export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const pb = await createPBServerClient();

@@ -23,6 +23,10 @@ import { updateDailyQuestsOnAnswer } from "@/lib/quests-and-skills";
 const answerRateLimit = new Map<string, number>();
 const RATE_LIMIT_WINDOW_MS = 2_000;
 
+/**
+ * TODO: Replace in-memory Map with Vercel KV (Redis) for production rate limiting
+ * to support horizontal scaling in Serverless environments.
+ */
 function checkAndTouchRateLimit(userId: string) {
   const now = Date.now();
   const last = answerRateLimit.get(userId) ?? 0;
