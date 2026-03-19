@@ -23,13 +23,18 @@ const submitAnswerSchema = z.object({
   timeMs: z.number().int().min(0).max(120_000).optional(),
 });
 
-export async function submitAnswer(questionId: string, selectedOption: string, timeMs?: number) {
+export async function submitAnswer(
+  questionId: string,
+  selectedOption: string,
+  timeMs?: number
+): Promise<{ isCorrect: boolean; message: string; newPowerLevel: number }> {
   // 1) Input Validation (Zod)
   const parsed = submitAnswerSchema.safeParse({ questionId, selectedOption, timeMs });
   if (!parsed.success) {
     return {
       isCorrect: false,
       message: "مدخلات غير صالحة.",
+      newPowerLevel: 0,
     };
   }
 
@@ -41,6 +46,7 @@ export async function submitAnswer(questionId: string, selectedOption: string, t
     return {
       isCorrect: false,
       message: "يجب تسجيل الدخول للإجابة.",
+      newPowerLevel: 0,
     };
   }
 
@@ -85,6 +91,7 @@ export async function submitAnswer(questionId: string, selectedOption: string, t
     return {
       isCorrect: false,
       message: "حدث خطأ غير متوقع. حاول مرة أخرى.",
+      newPowerLevel: 0,
     };
   }
 
@@ -166,5 +173,6 @@ export async function submitAnswer(questionId: string, selectedOption: string, t
   return {
     isCorrect,
     message: isCorrect ? "إجابة صحيحة! أحسنت." : "إجابة خاطئة. حاول مرة أخرى.",
+    newPowerLevel: nextPowerLevel,
   };
 }

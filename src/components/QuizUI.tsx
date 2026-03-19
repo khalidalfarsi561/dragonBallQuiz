@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import QuizCard from "@/components/QuizCard";
 import Leaderboard from "@/components/Leaderboard";
 import SharePowerButton from "@/components/SharePowerButton";
@@ -25,9 +26,12 @@ export default function QuizUI(props: {
 }) {
   const { question, username, powerLevel: powerLevelProp, avatarSrc = "/vercel.svg" } = props;
 
+  const router = useRouter();
+
   const [powerLevel, setPowerLevel] = useState<number>(powerLevelProp);
   const [feedback, setFeedback] = useState<Feedback>("idle");
   const [message, setMessage] = useState<string>("");
+  const [hasAnswered, setHasAnswered] = useState(false);
   const [pending, startTransition] = useTransition();
 
   // Client-side timing (used فقط لإحساس السرعة)
@@ -44,7 +48,9 @@ export default function QuizUI(props: {
   }, [powerLevelProp]);
 
   const onPick = (selectedOption: string) => {
-    if (!question || pending) return;
+    if (!question || pending || hasAnswered) return;
+
+    setHasAnswered(true);
 
     startTransition(async () => {
       const timeMs = Date.now() - questionStartRef.current;
@@ -57,10 +63,10 @@ export default function QuizUI(props: {
         setFeedback(res.isCorrect ? "correct" : "wrong");
         setMessage(res.message);
 
-        // تحديث محلي بسيط للهالة فوراً (حتى قبل جلب سجل المستخدم الحقيقي)
-        // لاحقاً سنجلب power_level الحقيقي من PB بعد كل إجابة.
-        setPowerLevel((p) => (res.isCorrect ? p + 50_000 : Math.max(0, p - 10_000)));
+        // سيتم تحديثه بالقيمة الحقيقية القادمة من الخادم
+        setPowerLevel(res.newPowerLevel);
       } catch {
+        setHasAnswered(false);
         setFeedback("wrong");
         setMessage("تعذر إرسال الإجابة. تأكد من تشغيل PocketBase وتسجيل الدخول.");
       }
@@ -104,7 +110,7 @@ export default function QuizUI(props: {
                     <button
                       key={opt}
                       type="button"
-                      disabled={pending}
+                      disabled={pending || hasAnswered}
                       onClick={() => onPick(opt)}
                       className="w-full rounded-xl border border-white/10 bg-white/10 px-4 py-3 text-start text-sm font-semibold text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-60"
                     >
@@ -114,6 +120,22 @@ export default function QuizUI(props: {
                 </div>
 
                 {message ? <p className="mt-4 text-sm text-white/80">{message}</p> : null}
+
+                {feedback !== "idle" ? (
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => {
+                      router.refresh();
+                      setHasAnswered(false);
+                      setFeedback("idle");
+                      setMessage("");
+                    }}
+                    className="mt-4 w-full rounded-xl border border-white/10 bg-white/10 px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    السؤال التالي
+                  </button>
+                ) : null}
               </QuizCard>
             )}
           </section>

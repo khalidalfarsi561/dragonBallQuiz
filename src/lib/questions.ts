@@ -32,7 +32,7 @@ export async function getOnePublicQuestion(): Promise<PublicQuestion | null> {
   const pb = await createPBAdminClient();
 
   const list = await pb.collection<QuestionRecord>("questions").getList(1, 1, {
-    sort: "-created",
+    sort: "@random",
     requestKey: "questions_latest_admin",
   });
 

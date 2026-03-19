@@ -18,11 +18,11 @@ type LeaderboardUserExpand = {
 
 type LeaderboardItem = {
   id: string;
-  user: string;
+  user_id: string;
   score?: number;
   streak?: number;
   expand?: {
-    user?: LeaderboardUserExpand;
+    user_id?: LeaderboardUserExpand;
   };
 };
 
@@ -44,14 +44,14 @@ export default function Leaderboard() {
   async function loadInitial() {
     const list = (await pb.collection("leaderboard").getList(1, 20, {
       sort: "-score,-streak,created",
-      expand: "user",
+      expand: "user_id",
       requestKey: "leaderboard_initial",
     })) as PBListResult<LeaderboardItem>;
 
     const mapped: LeaderboardRow[] = list.items.map((it) => ({
       id: it.id,
-      userId: it.user,
-      username: it.expand?.user?.username ?? `لاعب #${it.user.slice(0, 6)}`,
+      userId: it.user_id,
+      username: it.expand?.user_id?.username ?? `لاعب #${it.user_id.slice(0, 6)}`,
       score: Number(it.score ?? 0),
       streak: Number(it.streak ?? 0),
     }));
