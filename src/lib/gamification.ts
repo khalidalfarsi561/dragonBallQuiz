@@ -117,14 +117,7 @@ export function evaluateZenkai(params: {
   nextConsecutiveWrong: number;
   currentZenkai: ZenkaiState | null;
 }): { nextZenkai: ZenkaiState | null; zenkaiActivated: boolean } {
-  const {
-    prevStreak,
-    nextStreak,
-    prevConsecutiveWrong,
-    nextConsecutiveWrong,
-    wasCorrect,
-    currentZenkai,
-  } = params;
+  const { prevStreak, nextStreak, nextConsecutiveWrong, currentZenkai } = params;
 
   // إن كان الزنكاي مفعل: قلّل المحاولات المتبقية
   if (currentZenkai && currentZenkai.remainingAttempts > 0) {
@@ -135,13 +128,13 @@ export function evaluateZenkai(params: {
     };
   }
 
-  // تفعيل الزنكاي:
-  // - اللاعب كان لديه streak ثم فقده (nextStreak=0)
-  // - مع وجود أخطاء متتالية ملموسة (2+)
-  const streakLost = prevStreak > 0 && nextStreak === 0;
-  const wrongChain = !wasCorrect && (prevConsecutiveWrong >= 1 || nextConsecutiveWrong >= 2);
+  // تفعيل الزنكاي (منطق مصحح):
+  // - massiveStreakLost: فقد سلسلة قوية (>=5) دفعة واحدة
+  // - reachedWrongThreshold: وصل إلى 3 أخطاء متتالية
+  const massiveStreakLost = prevStreak >= 5 && nextStreak === 0;
+  const reachedWrongThreshold = nextConsecutiveWrong === 3;
 
-  if (streakLost && wrongChain) {
+  if (massiveStreakLost || reachedWrongThreshold) {
     return {
       nextZenkai: { remainingAttempts: 3, multiplier: 0.2 },
       zenkaiActivated: true,

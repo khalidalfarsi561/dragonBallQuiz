@@ -139,6 +139,9 @@ let adminAuthCache:
     }
   | undefined;
 
+// Thundering herd lock: ensures only one admin login happens at a time.
+let adminAuthPromise: Promise<PocketBase> | null = null;
+
 function decodeJwtExpMs(token: string): number | undefined {
   // JWT: header.payload.signature (payload is base64url JSON)
   const parts = token.split(".");
@@ -151,7 +154,10 @@ function decodeJwtExpMs(token: string): number | undefined {
     const pad = payloadBase64.length % 4;
     const padded = pad ? payloadBase64 + "=".repeat(4 - pad) : payloadBase64;
 
-    const json = Buffer.from(padded, "base64").toString("utf8");
+    const json =
+      typeof atob !== "undefined"
+        ? decodeURIComponent(escape(atob(padded)))
+        : Buffer.from(padded, "base64").toString("utf8");
     const payload = JSON.parse(json) as { exp?: number };
 
     if (!payload.exp) return undefined;
@@ -173,32 +179,50 @@ export async function createPBAdminClient() {
   const email = requireEnv("PB_ADMIN_EMAIL");
   const password = requireEnv("PB_ADMIN_PASSWORD");
 
-  const pb = new PocketBase(pbUrl);
-  pb.autoCancellation(false);
-
   const nowMs = Date.now();
 
+  // Fast path: valid cache
   if (isAdminCacheValid(nowMs)) {
+    const pb = new PocketBase(pbUrl);
+    pb.autoCancellation(false);
     pb.authStore.save(adminAuthCache!.token, adminAuthCache!.model as never);
     return pb;
   }
 
-  const auth = await pb.collection("_superusers").authWithPassword(email, password);
+  // Herd lock: if a login is already in progress, await it.
+  if (adminAuthPromise) return adminAuthPromise;
 
-  const token = pb.authStore.token;
-  const expMs = decodeJwtExpMs(token);
+  adminAuthPromise = (async () => {
+    const pb = new PocketBase(pbUrl);
+    pb.autoCancellation(false);
 
-  // If we can't decode exp, fall back to a short TTL to reduce auth spam safely.
-  const fallbackTtlMs = 5 * 60_000;
-  const expiresAtMs = expMs ?? nowMs + fallbackTtlMs;
+    return pb
+      .collection("_superusers")
+      .authWithPassword(email, password)
+      .then((auth) => {
+        const token = pb.authStore.token;
+        const expMs = decodeJwtExpMs(token);
 
-  adminAuthCache = {
-    token,
-    model: auth.record ?? pb.authStore.model,
-    expiresAtMs,
-  };
+        // If we can't decode exp, fall back to a short TTL to reduce auth spam safely.
+        const fallbackTtlMs = 5 * 60_000;
+        const expiresAtMs = expMs ?? nowMs + fallbackTtlMs;
 
-  return pb;
+        adminAuthCache = {
+          token,
+          model: auth.record ?? pb.authStore.model,
+          expiresAtMs,
+        };
+
+        adminAuthPromise = null;
+        return pb;
+      })
+      .catch((err) => {
+        adminAuthPromise = null;
+        throw err;
+      });
+  })();
+
+  return adminAuthPromise;
 }
 
 export interface LeaderboardRecord {
