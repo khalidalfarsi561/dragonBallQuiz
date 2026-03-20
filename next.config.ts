@@ -18,13 +18,6 @@ const nextConfig: NextConfig = {
             key: "Strict-Transport-Security",
             value: "max-age=63072000; includeSubDomains; preload",
           },
-          // Lock down to same-origin by default. If you later need external assets,
-          // expand directives deliberately (e.g. add https: sources per directive).
-          {
-            key: "Content-Security-Policy",
-            value:
-              "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data:; font-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self' http://127.0.0.1:8090;",
-          },
         ],
       },
     ];
