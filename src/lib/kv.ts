@@ -13,7 +13,7 @@ import "server-only";
 
 type KVLike = {
   get(key: string): Promise<string | null>;
-  set(key: string, value: string, opts?: { exMs?: number }): Promise<void>;
+  set(key: string, value: string, opts?: { exMs?: number; nx?: boolean }): Promise<boolean | void>;
   del(key: string): Promise<void>;
 };
 
@@ -40,22 +40,23 @@ async function createUpstash(): Promise<KVLike | null> {
       return data.result ?? null;
     },
     async set(key, value, opts) {
-      const res = await fetch(`${base}/set/${encodeURIComponent(key)}/${encodeURIComponent(value)}`, {
+      const url = `${base}/set/${encodeURIComponent(key)}/${encodeURIComponent(value)}?${
+        opts?.nx ? "NX=true&" : ""
+      }${opts?.exMs ? `PX=${opts.exMs}` : ""}`;
+
+      const res = await fetch(url, {
         method: "POST",
         headers,
         cache: "no-store",
       });
       if (!res.ok) throw new Error("Upstash set failed");
 
-      if (opts?.exMs && opts.exMs > 0) {
-        const sec = Math.ceil(opts.exMs / 1000);
-        const exRes = await fetch(`${base}/expire/${encodeURIComponent(key)}/${sec}`, {
-          method: "POST",
-          headers,
-          cache: "no-store",
-        });
-        if (!exRes.ok) throw new Error("Upstash expire failed");
-      }
+      const data = (await res.json()) as { result: "OK" | null };
+      if (data.result === "OK") return true;
+      if (data.result === null) return false;
+
+      // Should not happen, but keep a safe default
+      return false;
     },
     async del(key) {
       const res = await fetch(`${base}/del/${encodeURIComponent(key)}`, {
@@ -86,18 +87,27 @@ function memGet(key: string) {
   return row.v;
 }
 
-function memSet(key: string, value: string, exMs?: number) {
-  const exp = typeof exMs === "number" ? Date.now() + exMs : null;
+function memSet(key: string, value: string, opts?: { exMs?: number; nx?: boolean }) {
+  const now = Date.now();
+  const existing = mem.get(key);
+  if (opts?.nx && existing) {
+    if (existing.exp === null || existing.exp > now) return false;
+    // expired: treat as not existing
+    mem.delete(key);
+  }
+
+  const exp = typeof opts?.exMs === "number" ? now + opts.exMs : null;
   mem.set(key, { v: value, exp });
 
   // opportunistic cleanup
   if (mem.size > 50_000) {
-    const now = Date.now();
     for (const [k, r] of mem) {
       if (r.exp !== null && r.exp <= now) mem.delete(k);
       if (mem.size <= 50_000) break;
     }
   }
+
+  return true;
 }
 
 function memDel(key: string) {
@@ -110,7 +120,7 @@ function createDevMemKV(): KVLike {
       return memGet(key);
     },
     async set(key, value, opts) {
-      memSet(key, value, opts?.exMs);
+      return memSet(key, value, opts);
     },
     async del(key) {
       memDel(key);

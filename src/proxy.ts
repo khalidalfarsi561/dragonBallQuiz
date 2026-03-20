@@ -21,6 +21,13 @@ export function proxy(request: NextRequest) {
       ? `script-src 'self' 'nonce-${nonce}'`
       : `script-src 'self' 'nonce-${nonce}' 'unsafe-eval'`;
 
+  const pbUrl = process.env.NEXT_PUBLIC_PB_URL || "http://127.0.0.1:8090";
+
+  const styleSrc =
+    process.env.NODE_ENV === "production"
+      ? "style-src 'self'"
+      : "style-src 'self' 'unsafe-inline'";
+
   const csp = [
     "default-src 'self'",
     "base-uri 'self'",
@@ -29,9 +36,9 @@ export function proxy(request: NextRequest) {
     "form-action 'self'",
     "img-src 'self' data:",
     "font-src 'self'",
-    "style-src 'self' 'unsafe-inline'",
+    styleSrc,
     scriptSrc,
-    "connect-src 'self' http://127.0.0.1:8090",
+    "connect-src 'self' " + pbUrl,
   ].join("; ");
 
   const requestHeaders = new Headers(request.headers);

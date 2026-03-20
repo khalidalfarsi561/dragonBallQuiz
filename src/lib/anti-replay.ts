@@ -40,11 +40,10 @@ export async function markNonceUsedOrReject(input: {
   const kv = await getKV();
   const key = nonceKey(input.userId, input.questionId, input.nonce);
 
-  const existing = await kv.get(key);
-  if (existing) return { ok: false, reason: "Replay detected" };
-
   // value doesn't matter; keep minimal
-  await kv.set(key, "1", { exMs: ttlMs || 1 });
+  const setSuccess = await kv.set(key, "1", { exMs: ttlMs || 1, nx: true });
+
+  if (setSuccess === false) return { ok: false, reason: "Replay detected" };
 
   return { ok: true };
 }
