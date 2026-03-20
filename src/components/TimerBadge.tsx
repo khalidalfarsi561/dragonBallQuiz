@@ -25,9 +25,23 @@ export default function TimerBadge(props: {
     // If stopped, just freeze the current value (no interval).
     if (stopped) return;
 
-    // First update happens on the first interval tick.
+    const update = () => {
+      const deltaMs = Date.now() - startedAtMs;
+
+      // If startedAtMs is accidentally provided in seconds (epoch seconds),
+      // delta becomes ~1.7e12ms and the UI shows huge values like 1774021570s.
+      // Detect that case and convert seconds -> ms.
+      const startedAtMsFixed = startedAtMs < 10_000_000_000 ? startedAtMs * 1000 : startedAtMs;
+      const safeDeltaMs = Date.now() - startedAtMsFixed;
+
+      setElapsedSec(Math.max(0, Math.floor(safeDeltaMs / 1000)));
+    };
+
+    // Update immediately on mount to avoid showing 0s for a full second.
+    update();
+
     timerRef.current = window.setInterval(() => {
-      setElapsedSec(Math.floor((Date.now() - startedAtMs) / 1000));
+      update();
     }, 1000);
 
     return () => {

@@ -19,8 +19,14 @@ export interface DailyQuestState {
 }
 
 function todayKey(d = new Date()) {
-  // always YYYY-MM-DD (UTC) لتفادي اختلاف المناطق في SSR
-  return d.toISOString().slice(0, 10);
+  // Use Asia/Muscat (UTC+4) timezone to ensure daily quests reset at local midnight.
+  // 'en-CA' locale forces the standard "YYYY-MM-DD" format.
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Muscat",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
 }
 
 function randomId(prefix: string) {

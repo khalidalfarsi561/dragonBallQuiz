@@ -21,7 +21,7 @@ import { markNonceUsedOrReject } from "@/lib/anti-replay";
  *
  * Uses shared KV when configured (Upstash Redis REST), falls back to in-memory KV in dev.
  */
-const RATE_LIMIT_WINDOW_MS = 2_000;
+const RATE_LIMIT_WINDOW_MS = 800;
 
 async function checkAndTouchRateLimit(userId: string) {
   const now = Date.now();

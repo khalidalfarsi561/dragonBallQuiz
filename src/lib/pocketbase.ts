@@ -176,6 +176,15 @@ function isAdminCacheValid(nowMs: number) {
 
 export async function createPBAdminClient() {
   const pbUrl = requireEnv("NEXT_PUBLIC_PB_URL");
+
+  const apiKey = process.env.PB_ADMIN_API_KEY;
+  if (apiKey) {
+    const pbApiKeyClient = new PocketBase(pbUrl);
+    pbApiKeyClient.autoCancellation(false);
+    pbApiKeyClient.authStore.save(apiKey, null);
+    return pbApiKeyClient;
+  }
+
   const email = requireEnv("PB_ADMIN_EMAIL");
   const password = requireEnv("PB_ADMIN_PASSWORD");
 

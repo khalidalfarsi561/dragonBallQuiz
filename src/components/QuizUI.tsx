@@ -180,6 +180,7 @@ export default function QuizUI(props: {
               </div>
             ) : (
               <QuizCard
+                key={question.id}
                 title="سؤال اليوم"
                 feedback={feedback}
                 headerSlot={
