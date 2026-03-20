@@ -6,6 +6,14 @@ import type { NextConfig } from "next";
  * - Restrict Server Actions allowed origins (CSRF + React2Shell mitigation)
  */
 const nextConfig: NextConfig = {
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "res.cloudinary.com",
+      },
+    ],
+  },
   async headers() {
     return [
       {

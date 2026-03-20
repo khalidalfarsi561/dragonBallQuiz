@@ -106,6 +106,8 @@ function seededParticles(seed: number, count: number, spread: number): Particle[
 export default function UserAvatar(props: { src: string; alt: string; powerLevel: number; size?: number }) {
   const { src, alt, powerLevel, size = 96 } = props;
 
+  const safeSrc = src?.trim() ? src : "/vercel.svg";
+
   // NOTE: We intentionally avoid heavy DOM animation libs here for mobile performance.
 
   const tone = toneFromPowerLevel(powerLevel);
@@ -180,7 +182,7 @@ export default function UserAvatar(props: { src: string; alt: string; powerLevel
         className="relative overflow-hidden rounded-full border border-white/15 bg-white/5"
         style={{ width: size, height: size }}
       >
-        <Image src={src} alt={alt} fill sizes={`${size}px`} className="object-cover" priority />
+        <Image src={safeSrc} alt={alt} fill sizes={`${size}px`} className="object-cover" priority />
       </div>
 
       <style>{`

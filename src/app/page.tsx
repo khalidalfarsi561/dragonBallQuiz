@@ -24,9 +24,9 @@ export default async function Home() {
     <QuizUI
       question={q?.question ?? null}
       questionToken={q?.token ?? null}
-      username={user.username}
+      username={user.display_name || user.username}
       powerLevel={Number(user.power_level ?? 0)}
-      avatarSrc="/vercel.svg"
+      avatarSrc={user.avatar_url || "/vercel.svg"}
       leaderboardSlot={
         <Suspense fallback={<LeaderboardSkeleton />}>
           <LeaderboardServer />

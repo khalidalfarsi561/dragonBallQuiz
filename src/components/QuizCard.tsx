@@ -96,11 +96,11 @@ export default function QuizCard({
     >
       {title ? (
         <div className="mb-4 border-b border-white/10 pb-3">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-lg font-bold text-white">{title}</h2>
 
-            <div className="flex items-center gap-2">
-              {headerSlot ? <div className="shrink-0">{headerSlot}</div> : null}
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {headerSlot ? <div className="min-w-0">{headerSlot}</div> : null}
 
               {feedback !== "idle" ? (
                 <span

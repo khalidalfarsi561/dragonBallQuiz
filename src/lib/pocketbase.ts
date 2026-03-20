@@ -68,6 +68,12 @@ export interface UserRecord {
   username: string;
   email: string;
 
+  // --- Profile ---
+  display_name?: string;
+  bio?: string;
+  avatar_url?: string;
+  show_on_leaderboard?: boolean;
+
   power_level: number;
   zenkai_boosts: number;
   current_form: string;

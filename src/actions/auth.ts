@@ -47,7 +47,10 @@ export async function signUp(username: string, email: string, password: string) 
     passwordConfirm: parsed.data.password,
   };
 
-  await pb.collection<UserRecord>("users").create(payload as unknown as Partial<UserRecord>);
+  // PocketBase auth collection: in some secured configurations, POST /users/records is treated as admin-only.
+  // Use the dedicated auth signup endpoint instead, which respects "Allow new users to sign up"
+  // in the Users auth collection settings.
+  await pb.collection("users").create(payload);
 
   await pb.collection("users").authWithPassword(parsed.data.email, parsed.data.password);
   await syncPBAuthToCookies(pb);
