@@ -1,6 +1,5 @@
 "use client";
 
-import { motion, useReducedMotion } from "framer-motion";
 import Image from "next/image";
 
 type AuraTone = "yellow" | "red" | "blue" | "silver";
@@ -107,7 +106,7 @@ function seededParticles(seed: number, count: number, spread: number): Particle[
 export default function UserAvatar(props: { src: string; alt: string; powerLevel: number; size?: number }) {
   const { src, alt, powerLevel, size = 96 } = props;
 
-  const shouldReduceMotion = useReducedMotion();
+  // NOTE: We intentionally avoid heavy DOM animation libs here for mobile performance.
 
   const tone = toneFromPowerLevel(powerLevel);
   const colors = auraColor(tone);
@@ -116,9 +115,7 @@ export default function UserAvatar(props: { src: string; alt: string; powerLevel
   // فكّك profile لتفادي تحذيرات React Compiler حول deps قابلة للتعديل
   const { count, spread, sizeMin, sizeMax, durationMin, durationMax } = profile;
 
-  // react-hooks/preserve-manual-memoization:
-  // لتفادي تعارض React Compiler مع useMemo هنا، نستخدم توليداً مباشراً
-  // (النتيجة ثابتة نسبياً بسبب seed، والجزيئات بعد ذلك تتحرك بـ framer-motion).
+  // Generate deterministic particles (static DOM), animate via pure CSS for performance.
   const seed = Math.floor(powerLevel / 2500) + size * 31;
   const particles = seededParticles(seed, count, spread).map((p) => {
     const sizePx = Math.max(sizeMin, Math.min(sizeMax, p.size));
@@ -150,36 +147,30 @@ export default function UserAvatar(props: { src: string; alt: string; powerLevel
         style={{ width: size + 54, height: size + 54 }}
       />
 
-      {/* Particle aura (Framer Motion) */}
+      {/* Particle aura (Pure CSS Animations) */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0"
         style={{ width: size + 70, height: size + 70 }}
       >
         {particles.map((p) => (
-          <motion.div
+          <span
             key={p.id}
-            className="absolute left-1/2 top-1/2 rounded-full"
-            style={{
-              width: p.size,
-              height: p.size,
-              marginLeft: p.x,
-              background: tone === "silver" ? colors.particleSoft : colors.particle,
-              filter: `blur(${p.blur}px)`,
-              opacity: p.opacity,
-            }}
-            initial={{ y: 18, scale: 0.9, opacity: 0 }}
-            animate={{
-              y: [-10, -(size * 0.55) - 18],
-              opacity: [0, p.opacity, 0],
-              scale: [0.85, 1.0, 0.95],
-            }}
-            transition={{
-              duration: shouldReduceMotion ? 0 : p.duration,
-              delay: shouldReduceMotion ? 0 : p.delay,
-              repeat: shouldReduceMotion ? 0 : Infinity,
-              ease: "easeOut",
-            }}
+            className="ua-particle absolute left-1/2 top-1/2 rounded-full"
+            style={
+              {
+                width: p.size,
+                height: p.size,
+                marginLeft: p.x,
+                background: tone === "silver" ? colors.particleSoft : colors.particle,
+                filter: `blur(${p.blur}px)`,
+                opacity: p.opacity,
+                // CSS vars for perf-friendly animation
+                ["--ua-dur" as never]: `${p.duration}s`,
+                ["--ua-delay" as never]: `${p.delay}s`,
+                ["--ua-rise" as never]: `${-(size * 0.55) - 18}px`,
+              } as React.CSSProperties
+            }
           />
         ))}
       </div>
@@ -204,6 +195,30 @@ export default function UserAvatar(props: { src: string; alt: string; powerLevel
           40% { opacity: 0.65; transform: scale(0.98); }
           60% { opacity: 0.90; transform: scale(1.04); }
           80% { opacity: 0.60; transform: scale(1.01); }
+        }
+
+        /* GPU-friendly particle animation (transform + opacity only) */
+        .ua-particle {
+          will-change: transform, opacity;
+          transform: translateY(18px) scale(0.9);
+          opacity: 0;
+          animation-name: uaRise;
+          animation-duration: var(--ua-dur, 1.6s);
+          animation-delay: var(--ua-delay, 0s);
+          animation-iteration-count: infinite;
+          animation-timing-function: ease-out;
+          animation-fill-mode: both;
+        }
+
+        @keyframes uaRise {
+          0%   { transform: translateY(18px) scale(0.85); opacity: 0; }
+          20%  { opacity: 1; }
+          70%  { opacity: 0.9; }
+          100% { transform: translateY(var(--ua-rise, -60px)) scale(0.95); opacity: 0; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .ua-particle { animation: none !important; opacity: 0.35; transform: none; }
         }
       `}</style>
     </div>

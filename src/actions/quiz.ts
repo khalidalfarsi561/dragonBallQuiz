@@ -246,10 +246,18 @@ export async function submitAnswer(
 
   // Calculate power level (difficulty from question, time measured server-side from token issuance)
   const difficultyTier = (q.difficulty_tier ?? 1) as DifficultyTier;
-  const safeTimeMs = Math.min(
-    Math.max(Date.now() - tokenCheck.payload.issuedAtMs, 0),
-    120_000
-  );
+  const safeTimeMs = Math.min(Math.max(Date.now() - tokenCheck.payload.issuedAtMs, 0), 120_000);
+
+  // Anti-cheat: hard timeout (server-trusted)
+  if (safeTimeMs > 45_000) {
+    return {
+      isCorrect: false,
+      message: "انتهى وقت الإجابة",
+      newPowerLevel: currentPowerLevel,
+      correctOption: q.correct_answer,
+      explanation: String((q as unknown as { explanation?: unknown }).explanation ?? ""),
+    };
+  }
 
   const nextPowerLevel = calculatePowerLevel({
     currentPowerLevel,
@@ -272,14 +280,14 @@ export async function submitAnswer(
     });
 
     if (questUpdate.earnedSkillPoints > 0 || user.last_login !== questUpdate.lastLoginToStore) {
-      void adminPb.collection<UserRecord>("users").update(userId, {
+      await adminPb.collection<UserRecord>("users").update(userId, {
         skill_points: Number(user.skill_points ?? 0) + questUpdate.earnedSkillPoints,
         daily_quests: questUpdate.nextDailyQuests as unknown,
         last_login: questUpdate.lastLoginToStore,
       } satisfies Partial<UserRecord>);
     } else {
       // حتى بدون مكافآت، نحدّث daily_quests إذا كان تقدم المهام تغيّر
-      void adminPb.collection<UserRecord>("users").update(userId, {
+      await adminPb.collection<UserRecord>("users").update(userId, {
         daily_quests: questUpdate.nextDailyQuests as unknown,
         last_login: questUpdate.lastLoginToStore,
       } satisfies Partial<UserRecord>);

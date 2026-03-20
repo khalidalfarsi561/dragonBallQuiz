@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type React from "react";
 import { useRouter } from "next/navigation";
 import QuizCard from "@/components/QuizCard";
+import TimerBadge from "@/components/TimerBadge";
 import SharePowerButton from "@/components/SharePowerButton";
 import UserAvatar from "@/components/UserAvatar";
 import { submitAnswer } from "@/actions/quiz";
@@ -60,32 +61,11 @@ export default function QuizUI(props: {
 
   // Client-side timing (used فقط لإحساس السرعة)
   const questionStartRef = useRef<number>(0);
-  const timerRef = useRef<number | null>(null);
-  const [elapsedSec, setElapsedSec] = useState(0);
 
   useEffect(() => {
     // effect is the right place for impure values like Date.now()
     questionStartRef.current = Date.now();
-
-    setElapsedSec(0);
-    if (timerRef.current) {
-      window.clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-
-    // Timer UI (display only) - updates once per second
-    timerRef.current = window.setInterval(() => {
-      setElapsedSec(Math.floor((Date.now() - questionStartRef.current) / 1000));
-    }, 1000);
   }, [question?.id]);
-
-  useEffect(() => {
-    // stop timer after answering (to prevent extra rerenders)
-    if (hasAnswered && timerRef.current) {
-      window.clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-  }, [hasAnswered]);
 
   useEffect(() => {
     // keep in sync when server provides updated value after refresh
@@ -214,12 +194,10 @@ export default function QuizUI(props: {
                       {difficultyLabel.text}
                     </span>
 
-                    <span
-                      className="inline-flex items-center rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-xs font-bold text-white/90"
-                      aria-label={`الوقت: ${elapsedSec} ثانية`}
-                    >
-                      {elapsedSec}s
-                    </span>
+                    <TimerBadge
+                      startedAtMs={questionStartRef.current}
+                      stopped={hasAnswered}
+                    />
 
                     <span
                       className="inline-flex items-center rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-xs font-bold text-white/90"

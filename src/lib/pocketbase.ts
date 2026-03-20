@@ -121,6 +121,53 @@ function requireEnv(name: string) {
  * - يستخدم فقط داخل Server Actions/Server Components لتنفيذ عمليات خلفية تتجاوز API Rules
  * - لا يتم تمريره أبداً للعميل
  */
+/**
+ * Admin auth caching (in-memory)
+ * - Prevents re-auth on every request which can overload PocketBase
+ * - In serverless/edge environments, this cache may be short-lived, but still reduces burst load
+ *
+ * NOTE: Prefer a static Admin API key if your PocketBase version supports it.
+ * This project currently authenticates via superuser email/password and caches the token.
+ */
+let adminAuthCache:
+  | {
+      token: string;
+      // PocketBase `authStore.model` is used only to keep SDK happy; we avoid depending on its shape.
+      model: unknown;
+      // When we should refresh (ms since epoch)
+      expiresAtMs: number;
+    }
+  | undefined;
+
+function decodeJwtExpMs(token: string): number | undefined {
+  // JWT: header.payload.signature (payload is base64url JSON)
+  const parts = token.split(".");
+  if (parts.length < 2) return undefined;
+
+  try {
+    const payloadBase64Url = parts[1];
+    const payloadBase64 = payloadBase64Url.replace(/-/g, "+").replace(/_/g, "/");
+    // Add padding
+    const pad = payloadBase64.length % 4;
+    const padded = pad ? payloadBase64 + "=".repeat(4 - pad) : payloadBase64;
+
+    const json = Buffer.from(padded, "base64").toString("utf8");
+    const payload = JSON.parse(json) as { exp?: number };
+
+    if (!payload.exp) return undefined;
+    return payload.exp * 1000;
+  } catch {
+    return undefined;
+  }
+}
+
+function isAdminCacheValid(nowMs: number) {
+  if (!adminAuthCache) return false;
+  // Refresh a bit early to avoid edge expiry while processing
+  const refreshSkewMs = 30_000;
+  return adminAuthCache.expiresAtMs - refreshSkewMs > nowMs;
+}
+
 export async function createPBAdminClient() {
   const pbUrl = requireEnv("NEXT_PUBLIC_PB_URL");
   const email = requireEnv("PB_ADMIN_EMAIL");
@@ -128,7 +175,28 @@ export async function createPBAdminClient() {
 
   const pb = new PocketBase(pbUrl);
   pb.autoCancellation(false);
-  await pb.collection("_superusers").authWithPassword(email, password);
+
+  const nowMs = Date.now();
+
+  if (isAdminCacheValid(nowMs)) {
+    pb.authStore.save(adminAuthCache!.token, adminAuthCache!.model as never);
+    return pb;
+  }
+
+  const auth = await pb.collection("_superusers").authWithPassword(email, password);
+
+  const token = pb.authStore.token;
+  const expMs = decodeJwtExpMs(token);
+
+  // If we can't decode exp, fall back to a short TTL to reduce auth spam safely.
+  const fallbackTtlMs = 5 * 60_000;
+  const expiresAtMs = expMs ?? nowMs + fallbackTtlMs;
+
+  adminAuthCache = {
+    token,
+    model: auth.record ?? pb.authStore.model,
+    expiresAtMs,
+  };
 
   return pb;
 }
