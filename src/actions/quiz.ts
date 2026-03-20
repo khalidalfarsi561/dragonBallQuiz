@@ -65,6 +65,7 @@ export async function submitAnswer(
   message: string;
   newPowerLevel: number;
   correctOption: string;
+  explanation: string;
 }> {
   // 1) Input Validation (Zod)
   const parsed = submitAnswerSchema.safeParse({ questionId, selectedOption, questionToken, timeMs });
@@ -74,6 +75,7 @@ export async function submitAnswer(
       message: "مدخلات غير صالحة.",
       newPowerLevel: 0,
       correctOption: "",
+      explanation: "",
     };
   }
 
@@ -87,6 +89,7 @@ export async function submitAnswer(
       message: "يجب تسجيل الدخول للإجابة.",
       newPowerLevel: 0,
       correctOption: "",
+      explanation: "",
     };
   }
 
@@ -100,6 +103,7 @@ export async function submitAnswer(
       message: "انتهت صلاحية السؤال أو أن الطلب غير صالح.",
       newPowerLevel: 0,
       correctOption: "",
+      explanation: "",
     };
   }
 
@@ -109,6 +113,7 @@ export async function submitAnswer(
       message: "طلب غير مصرح به.",
       newPowerLevel: 0,
       correctOption: "",
+      explanation: "",
     };
   }
 
@@ -125,6 +130,7 @@ export async function submitAnswer(
       message: "تم إرسال هذه الإجابة مسبقاً (محاولة مكررة).",
       newPowerLevel: 0,
       correctOption: "",
+      explanation: "",
     };
   }
 
@@ -136,6 +142,7 @@ export async function submitAnswer(
       message: rl.message,
       newPowerLevel: 0,
       correctOption: "",
+      explanation: "",
     };
   }
 
@@ -179,6 +186,7 @@ export async function submitAnswer(
       message: "حدث خطأ غير متوقع. حاول مرة أخرى.",
       newPowerLevel: 0,
       correctOption: "",
+      explanation: "",
     };
   }
 
@@ -297,5 +305,6 @@ export async function submitAnswer(
     message: isCorrect ? "إجابة صحيحة! أحسنت." : "إجابة خاطئة. حاول مرة أخرى.",
     newPowerLevel: nextPowerLevel,
     correctOption: q.correct_answer,
+    explanation: String((q as unknown as { explanation?: unknown }).explanation ?? ""),
   };
 }

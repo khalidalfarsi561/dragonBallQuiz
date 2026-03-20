@@ -13,11 +13,19 @@ export type PublicQuestion = {
   content: string;
   options: string[];
   difficultyTier: number;
+
+  // Optional explanation shown AFTER the user answers
+  explanation?: string;
 };
 
 type Feedback = "idle" | "correct" | "wrong";
 
-type OptionState = "idle" | "selected" | "correct" | "revealed-correct" | "revealed-wrong";
+type OptionState =
+  | "idle"
+  | "selected"
+  | "correct"
+  | "revealed-correct"
+  | "revealed-wrong";
 
 export default function QuizUI(props: {
   question: PublicQuestion | null;
@@ -48,6 +56,7 @@ export default function QuizUI(props: {
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [pendingOption, setPendingOption] = useState<string | null>(null);
   const [correctOption, setCorrectOption] = useState<string | null>(null);
+  const [explanation, setExplanation] = useState<string>("");
 
   // Client-side timing (used فقط لإحساس السرعة)
   const questionStartRef = useRef<number>(0);
@@ -88,6 +97,7 @@ export default function QuizUI(props: {
     setSelectedOption(null);
     setPendingOption(null);
     setCorrectOption(null);
+    setExplanation("");
     setHasAnswered(false);
     setFeedback("idle");
     setMessage("");
@@ -95,9 +105,20 @@ export default function QuizUI(props: {
 
   const difficultyLabel = useMemo(() => {
     const tier = question?.difficultyTier ?? 0;
-    if (tier <= 1) return { text: "سهل", className: "border-emerald-400/30 bg-emerald-500/10 text-emerald-100" };
-    if (tier === 2) return { text: "متوسط", className: "border-amber-400/30 bg-amber-500/10 text-amber-100" };
-    return { text: "صعب", className: "border-rose-400/30 bg-rose-500/10 text-rose-100" };
+    if (tier <= 1)
+      return {
+        text: "سهل",
+        className: "border-emerald-400/30 bg-emerald-500/10 text-emerald-100",
+      };
+    if (tier === 2)
+      return {
+        text: "متوسط",
+        className: "border-amber-400/30 bg-amber-500/10 text-amber-100",
+      };
+    return {
+      text: "صعب",
+      className: "border-rose-400/30 bg-rose-500/10 text-rose-100",
+    };
   }, [question?.difficultyTier]);
 
   const questionProgress = useMemo(() => {
@@ -127,6 +148,7 @@ export default function QuizUI(props: {
         setFeedback(res.isCorrect ? "correct" : "wrong");
         setMessage(res.message);
         setCorrectOption(res.correctOption || null);
+        setExplanation(res.explanation || "");
 
         // سيتم تحديثه بالقيمة الحقيقية القادمة من الخادم
         setPowerLevel(res.newPowerLevel);
@@ -273,7 +295,9 @@ export default function QuizUI(props: {
                               <span
                                 className={[
                                   "text-xs font-extrabold",
-                                  feedback === "correct" ? "text-emerald-300" : "text-rose-300",
+                                  feedback === "correct"
+                                    ? "text-emerald-300"
+                                    : "text-rose-300",
                                 ].join(" ")}
                                 aria-hidden="true"
                               >
@@ -292,6 +316,17 @@ export default function QuizUI(props: {
                     <p className="text-sm text-white/80" aria-live="polite">
                       {message}
                     </p>
+                  ) : null}
+
+                  {feedback !== "idle" && explanation ? (
+                    <div className="mt-3 rounded-xl border border-white/10 bg-white/5 p-4">
+                      <div className="mb-1 text-xs font-bold text-white/70">
+                        توضيح الإجابة
+                      </div>
+                      <p className="text-sm leading-7 text-white/85">
+                        {explanation}
+                      </p>
+                    </div>
                   ) : null}
                 </div>
 
