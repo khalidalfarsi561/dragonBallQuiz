@@ -31,6 +31,7 @@ type OptionState =
 export default function QuizUI(props: {
   question: PublicQuestion | null;
   questionToken: string | null;
+  seriesSlug?: string;
 
   username: string;
   powerLevel: number;
@@ -41,6 +42,7 @@ export default function QuizUI(props: {
   const {
     question,
     questionToken,
+    seriesSlug,
     username,
     powerLevel: powerLevelProp,
     avatarSrc = "/vercel.svg",
@@ -123,7 +125,7 @@ export default function QuizUI(props: {
       setFeedback("idle");
 
       try {
-        const res = await submitAnswer(question.id, opt, questionToken, timeMs);
+        const res = await submitAnswer(seriesSlug ?? "dragon-ball", question.id, opt, questionToken, timeMs);
 
         setFeedback(res.isCorrect ? "correct" : "wrong");
         setMessage(res.message);

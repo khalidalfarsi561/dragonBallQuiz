@@ -34,7 +34,7 @@ export function proxy(request: NextRequest) {
     "object-src 'none'",
     "frame-ancestors 'none'",
     "form-action 'self'",
-    "img-src 'self' data:",
+    "img-src 'self' data: https://images.unsplash.com https://i.ibb.co",
     "font-src 'self'",
     styleSrc,
     scriptSrc,

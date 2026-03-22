@@ -5,8 +5,11 @@ import type { QuestionRecord } from "@/lib/pocketbase";
 import { createPBAdminClient } from "@/lib/pocketbase";
 import type { PublicQuestion } from "@/components/QuizUI";
 import { createQuizQuestionToken } from "@/lib/quiz-session";
+import { dragonBallSeries } from "@/lib/series";
 
 const optionsSchema = z.array(z.string().min(1)).min(2).max(8);
+
+const seriesSlugs = new Set(dragonBallSeries.map((series) => series.slug));
 
 function toPublicQuestion(q: QuestionRecord): PublicQuestion | null {
   const optionsParsed = optionsSchema.safeParse(q.options);
@@ -29,13 +32,25 @@ function toPublicQuestion(q: QuestionRecord): PublicQuestion | null {
  * - يتم الجلب عبر Superuser client (لأن collection مغلقة عن العامة)
  * - يتم "تعقيم" السجل عبر تحويله إلى PublicQuestion (لا يحتوي correct_answer أصلاً)
  */
-export async function getOnePublicQuestion(): Promise<PublicQuestion | null> {
+export async function getOnePublicQuestion(seriesSlug?: string): Promise<PublicQuestion | null> {
   const pb = await createPBAdminClient();
 
-  const list = await pb.collection<QuestionRecord>("questions").getList(1, 1, {
-    sort: "@random",
-    requestKey: "questions_latest_admin",
-  });
+  const filter =
+    seriesSlug && seriesSlugs.has(seriesSlug)
+      ? `series_slug = "${seriesSlug}"`
+      : "";
+
+  let list;
+  try {
+    list = await pb.collection<QuestionRecord>("questions").getList(1, 1, {
+      sort: "@random",
+      filter: filter || undefined,
+      requestKey: seriesSlug ? `questions_latest_admin_${seriesSlug}` : "questions_latest_admin",
+    });
+  } catch (error) {
+    console.error("[Question Load Error]:", error);
+    return null;
+  }
 
   const first = list.items?.[0];
   if (!first) return null;
@@ -51,8 +66,8 @@ export async function getOnePublicQuestion(): Promise<PublicQuestion | null> {
  * - compute time server-side (no client cheating)
  * - prevent replaying answers for the same question (nonce)
  */
-export async function getQuestionForUser(userId: string): Promise<{ question: PublicQuestion; token: string } | null> {
-  const q = await getOnePublicQuestion();
+export async function getQuestionForUser(userId: string, seriesSlug?: string): Promise<{ question: PublicQuestion; token: string } | null> {
+  const q = await getOnePublicQuestion(seriesSlug);
   if (!q) return null;
 
   const token = createQuizQuestionToken({ userId, questionId: q.id });

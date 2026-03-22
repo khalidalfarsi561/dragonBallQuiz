@@ -10,7 +10,11 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       {
         protocol: "https",
-        hostname: "res.cloudinary.com",
+        hostname: "images.unsplash.com",
+      },
+      {
+        protocol: "https",
+        hostname: "i.ibb.co",
       },
     ],
   },
@@ -27,8 +31,9 @@ const nextConfig: NextConfig = {
             value: "max-age=63072000; includeSubDomains; preload",
           },
           {
-            key: "Permissions-Policy",
-            value: "camera=(), microphone=(), geolocation=(), browsing-topics=()",
+            key: "Content-Security-Policy",
+            value:
+              "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://images.unsplash.com https://i.ibb.co; font-src 'self' data:; connect-src 'self' https://images.unsplash.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests",
           },
         ],
       },

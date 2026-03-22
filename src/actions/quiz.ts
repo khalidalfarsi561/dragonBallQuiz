@@ -14,6 +14,7 @@ import {
 import { updateDailyQuestsOnAnswer } from "@/lib/quests-and-skills";
 import { verifyQuizQuestionToken } from "@/lib/quiz-session";
 import { markNonceUsedOrReject } from "@/lib/anti-replay";
+import { dragonBallSeries } from "@/lib/series";
 
 /**
  * ---- Rate Limiting ----
@@ -40,9 +41,15 @@ async function checkAndTouchRateLimit(userId: string) {
   return { ok: true as const };
 }
 
+const seriesSlugs = new Set(dragonBallSeries.map((series) => series.slug));
+
 const submitAnswerSchema = z.object({
-  questionId: z
+  seriesSlug: z
     .string()
+    .min(1)
+    .max(64)
+    .refine((value) => seriesSlugs.has(value), "السلسلة غير صالحة"),
+  questionId: z.string()
     .min(1)
     .max(128)
     .regex(/^[a-z0-9]+$/i, "معرّف السؤال غير صالح"),
@@ -56,6 +63,7 @@ const submitAnswerSchema = z.object({
 });
 
 export async function submitAnswer(
+  seriesSlug: string,
   questionId: string,
   selectedOption: string,
   questionToken: string | null,
@@ -68,7 +76,7 @@ export async function submitAnswer(
   explanation: string;
 }> {
   // 1) Input Validation (Zod)
-  const parsed = submitAnswerSchema.safeParse({ questionId, selectedOption, questionToken, timeMs });
+  const parsed = submitAnswerSchema.safeParse({ seriesSlug, questionId, selectedOption, questionToken, timeMs });
   if (!parsed.success) {
     return {
       isCorrect: false,
