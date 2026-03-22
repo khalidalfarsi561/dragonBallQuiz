@@ -75,29 +75,13 @@ export default function Leaderboard(props: { initialItems?: LeaderboardItem[] })
   }
 
   useEffect(() => {
-    let unsub: (() => Promise<void>) | null = null;
-
     if (!props.initialItems?.length) {
       loadInitial().catch(() => {
         // ignore UI errors for now
       });
     }
 
-    pb.realtime
-      .subscribe("leaderboard", async () => {
-        // reload top 20 on each change (simple + reliable)
-        await loadInitial();
-      })
-      .then((u) => {
-        unsub = u;
-      })
-      .catch(() => {
-        unsub = null;
-      });
-
-    return () => {
-      if (unsub) void unsub();
-    };
+    void loadInitial();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

@@ -71,7 +71,7 @@ function SeriesCard({ item }: { item: DragonBallSeries }) {
     <motion.div variants={cardVariants}>
       <div className="group relative overflow-visible rounded-3xl border border-white/10 bg-white/5 backdrop-blur-md">
         <Link
-          href={`/series/${item.slug}`}
+          href={`/quiz/${item.slug}`}
           className="relative block overflow-hidden rounded-3xl"
           dir="rtl"
         >
