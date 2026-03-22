@@ -81,9 +81,15 @@ function SeriesCard({ item }: { item: DragonBallSeries }) {
               fill
               alt={item.name}
               sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+              loading="eager"
+              priority={
+                item.slug === "dragon-ball-z" ||
+                item.slug === "dragon-ball-super"
+              }
               className="object-cover transition-transform duration-500 group-hover:scale-105"
             />
-            <div className="absolute inset-0 bg-linear-to-t from-zinc-950 via-zinc-950/80 to-transparent" />
+            <div className="absolute inset-y-0 left-0 w-20 bg-linear-to-r from-black/60 via-black/25 to-transparent" />
+            <div className="absolute inset-y-0 right-0 w-20 bg-linear-to-l from-black/60 via-black/25 to-transparent" />
             <div className="absolute right-3 top-3 flex items-start gap-2">
               <div className="rounded-full bg-linear-to-r from-red-600 via-red-500 to-red-700 px-2.5 py-1 text-[11px] font-black leading-none text-white shadow-lg shadow-red-950/30 ring-1 ring-white/10">
                 {item.questionCount ?? "?"} سؤال
@@ -103,22 +109,22 @@ function SeriesCard({ item }: { item: DragonBallSeries }) {
               </div>
             </div>
 
-              <div className="absolute inset-x-0 bottom-4 flex justify-center px-4">
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    setOpen((value) => !value);
-                  }}
-                  className="min-w-[11rem] rounded-full border border-white/10 bg-linear-to-r from-amber-500 via-orange-500 to-red-500 px-5 py-2 text-center text-sm font-bold tracking-wide text-white backdrop-blur-md shadow-lg shadow-orange-950/30 transition hover:from-amber-400 hover:via-orange-400 hover:to-red-400"
-                  aria-expanded={open}
-                  aria-haspopup="listbox"
-                >
-                  <span className="block text-sm uppercase tracking-[0.25em]">
-                    اختر الآرك
-                  </span>
-                </button>
-              </div>
+            <div className="absolute inset-x-0 bottom-4 flex justify-center px-4">
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.preventDefault();
+                  setOpen((value) => !value);
+                }}
+                className="min-w-44 rounded-full border border-white/10 bg-linear-to-r from-amber-500 via-orange-500 to-red-500 px-5 py-2 text-center text-sm font-bold tracking-wide text-white backdrop-blur-md shadow-lg shadow-orange-950/30 transition hover:from-amber-400 hover:via-orange-400 hover:to-red-400"
+                aria-expanded={open}
+                aria-haspopup="listbox"
+              >
+                <span className="block text-sm uppercase tracking-[0.25em]">
+                  اختر الآرك
+                </span>
+              </button>
+            </div>
           </div>
         </Link>
 

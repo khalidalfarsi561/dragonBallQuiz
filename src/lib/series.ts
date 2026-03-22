@@ -14,7 +14,7 @@ export const dragonBallSeries: DragonBallSeries[] = [
     name: "دراغون بول",
     subtitle: "البداية الكلاسيكية",
     slug: "dragon-ball",
-    coverSrc: "https://i.ibb.co/4K9m3yP/dragon-ball-cover.png?version=1",
+    coverSrc: "https://i.ibb.co/4ZG4KPDb/bb2d864e-e8b4-452e-8a34-1b6d7346f5bd-batcheditor-fotor.webp",
     coverLabel: "Dragon Ball",
     coverHint: "غلاف السلسلة",
   },
