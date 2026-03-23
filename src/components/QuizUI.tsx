@@ -5,7 +5,6 @@ import type React from "react";
 import { useRouter } from "next/navigation";
 import QuizCard from "@/components/QuizCard";
 import TimerBadge from "@/components/TimerBadge";
-import SharePowerButton from "@/components/SharePowerButton";
 import UserAvatar from "@/components/UserAvatar";
 import { submitAnswer } from "@/actions/quiz";
 
@@ -168,12 +167,11 @@ export default function QuizUI(props: {
               </div>
             </div>
 
-            <SharePowerButton powerLevel={powerLevel} />
           </div>
         </header>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <section className="flex flex-col gap-4">
+        <div className="flex flex-1 justify-center">
+          <section className="flex w-full max-w-5xl flex-col gap-4">
             {!question ? (
               <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-white/70 backdrop-blur-md">
                 لا يوجد سؤال متاح حالياً. تأكد من إضافة أسئلة في PocketBase (Collection: questions).
@@ -187,7 +185,7 @@ export default function QuizUI(props: {
                   <div className="flex flex-wrap items-center gap-2">
                     <span
                       className={[
-                        "inline-flex items-center rounded-full border border-white/10 px-2.5 py-1 text-xs font-bold",
+                        "inline-flex items-center rounded-full border border-white/10 px-2 py-0.5 text-[10px] font-bold sm:px-2.5 sm:py-1 sm:text-xs",
                         difficultyLabel.className,
                       ].join(" ")}
                       aria-label={`مستوى الصعوبة: ${difficultyLabel.text}`}
@@ -198,7 +196,7 @@ export default function QuizUI(props: {
                     <TimerBadge startedAtMs={questionStartRef.current} stopped={hasAnswered} />
 
                     <span
-                      className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-bold text-white/90"
+                      className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-bold text-white/90 sm:px-2.5 sm:py-1 sm:text-xs"
                       aria-label={`التقدم: ${questionProgress.current} من ${questionProgress.total}`}
                       title="تقدم مبدئي (سيستبدل لاحقاً بتقدم حقيقي من السيرفر)"
                     >
@@ -207,9 +205,9 @@ export default function QuizUI(props: {
                   </div>
                 }
               >
-                <p className="mb-4 text-[1.05rem] font-extrabold leading-8 text-white">{question.content}</p>
+                <p className="mb-3 text-sm font-extrabold leading-6 text-white sm:mb-4 sm:text-[1.05rem] sm:leading-8">{question.content}</p>
 
-                <div className="grid grid-cols-1 gap-3">
+                <div className="grid grid-cols-1 gap-2 sm:gap-3">
                   {question.options.map((opt) => {
                     const state: OptionState = !selectedOption
                       ? "idle"
@@ -247,17 +245,17 @@ export default function QuizUI(props: {
                         disabled={pending || hasAnswered}
                         onClick={() => onPick(opt)}
                         className={[
-                          "relative w-full rounded-xl border px-4 py-3 text-start text-sm font-semibold transition",
+                          "relative w-full rounded-lg border px-3 py-2 text-start text-sm font-semibold transition sm:rounded-xl sm:px-4 sm:py-3",
                           "wrap-break-word",
                           stateClass,
                           "hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-60",
                           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950",
                         ].join(" ")}
                       >
-                        <span className="flex items-center justify-between gap-3">
-                          <span className="min-w-0 flex-1 whitespace-normal leading-6">{opt}</span>
+                        <span className="flex items-center justify-between gap-2 sm:gap-3">
+                          <span className="min-w-0 flex-1 whitespace-normal leading-5 sm:leading-6">{opt}</span>
 
-                          <span className="flex h-5 w-5 items-center justify-center">
+                          <span className="flex h-4 w-4 items-center justify-center sm:h-5 sm:w-5">
                             {isPendingThis ? (
                               <span
                                 className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white/80"

@@ -22,34 +22,28 @@ export default async function QuizProfilePage() {
   return (
     <main
       dir="rtl"
-      className="min-h-screen bg-zinc-950 px-4 py-6 text-white lg:px-6 lg:py-8"
+      className="flex min-h-screen items-center justify-center bg-zinc-950 px-4 py-6 text-white lg:px-6 lg:py-8"
     >
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
-        <div className="rounded-3xl border border-white/10 bg-white/5 p-5 backdrop-blur-md">
-          <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
-            <div className="flex items-center gap-4">
-              <UserAvatar
-                src={avatarSrc}
-                alt="User"
-                powerLevel={powerLevel}
-                size={92}
-              />
-              <div>
-                <h1 className="text-2xl font-black tracking-tight">
-                  مرحباً {username}
-                </h1>
-                <p className="mt-1 text-sm text-white/70">
-                  مستوى طاقتك الحالي:
-                  <span className="ms-2 font-(--font-ibm-plex-arabic)">
-                    {powerLevel.toLocaleString("ar")}
-                  </span>
-                </p>
-              </div>
+      <div className="mx-auto flex w-full max-w-md justify-center">
+        <div className="flex h-[88vh] w-full flex-col justify-between rounded-4xl border border-white/10 bg-white/5 p-6 backdrop-blur-md">
+          <div className="flex flex-1 flex-col items-center justify-center gap-8 text-center">
+            <UserAvatar
+              src={avatarSrc}
+              alt="User"
+              powerLevel={powerLevel}
+              size={112}
+            />
+            <div className="w-full space-y-3">
+              <h1 className="truncate text-2xl font-black tracking-tight">
+                مرحباً {username}
+              </h1>
+              <p className="truncate text-sm text-white/70">
+                مستوى طاقتك الحالي:
+                <span className="ms-2 font-(--font-ibm-plex-arabic)">
+                  {powerLevel.toLocaleString("ar")}
+                </span>
+              </p>
             </div>
-
-            <span className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold text-white/80">
-              الملف الشخصي
-            </span>
           </div>
         </div>
       </div>

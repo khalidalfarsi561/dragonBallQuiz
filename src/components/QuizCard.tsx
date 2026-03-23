@@ -90,7 +90,7 @@ export default function QuizCard({
       animate={animate}
       transition={transition}
       className={[
-        "relative w-full rounded-2xl border bg-white/5 p-5 shadow-lg backdrop-blur-md dark:bg-black/20",
+        "relative mx-auto flex w-[calc(100vw-1rem)] max-w-none h-[calc(100svh-1rem)] max-h-[calc(100svh-1rem)] flex-col overflow-hidden rounded-2xl border bg-white/5 p-4 shadow-lg backdrop-blur-md dark:bg-black/20 sm:h-auto sm:max-h-none sm:w-full sm:max-w-[min(100vw-2rem,42rem)] sm:aspect-square sm:p-5",
         feedbackFrameClass,
       ].join(" ")}
     >
@@ -120,7 +120,11 @@ export default function QuizCard({
         </div>
       ) : null}
 
-      <div className="text-white/90">{children}</div>
+      <div className="flex min-h-0 flex-1 flex-col items-stretch justify-start gap-2 overflow-hidden pt-3 text-center text-white/90 sm:gap-3 sm:pt-4">
+        <div className="min-h-0 overflow-hidden rounded-2xl border border-white/10 bg-black/20 p-2 shadow-inner shadow-black/20 sm:p-3">
+          {children}
+        </div>
+      </div>
     </motion.div>
   );
 }
