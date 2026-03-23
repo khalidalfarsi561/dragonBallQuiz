@@ -84,24 +84,6 @@ export default function QuizUI(props: {
     setMessage("");
   }, [question?.id]);
 
-  useEffect(() => {
-    return () => {
-      const doc = document as Document & {
-        fullscreenElement?: Element | null;
-        webkitFullscreenElement?: Element | null;
-        exitFullscreen?: () => Promise<void>;
-        webkitExitFullscreen?: () => Promise<void>;
-        msExitFullscreen?: () => Promise<void>;
-      };
-      const exitFS = doc.exitFullscreen || doc.webkitExitFullscreen || doc.msExitFullscreen;
-      if (doc.fullscreenElement || doc.webkitFullscreenElement) {
-        if (typeof exitFS === "function") {
-          exitFS.call(doc).catch(() => {});
-        }
-      }
-    };
-  }, []);
-
   const difficultyLabel = useMemo(() => {
     const tier = question?.difficultyTier ?? 0;
     if (tier <= 1)
@@ -264,7 +246,6 @@ export default function QuizUI(props: {
                         onClick={() => onPick(opt)}
                         className={[
                           "relative w-full rounded-lg border px-3 py-2 text-start text-sm font-semibold transition sm:rounded-xl sm:px-4 sm:py-3",
-                          "wrap-break-word",
                           stateClass,
                           "hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-60",
                           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950",

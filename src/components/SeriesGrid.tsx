@@ -67,20 +67,6 @@ function SeriesCard({ item }: { item: DragonBallSeries }) {
   const router = useRouter();
 
   const handleEnterQuiz = () => {
-    const docEl = document.documentElement as unknown as {
-      requestFullscreen?: () => Promise<void>;
-      webkitRequestFullscreen?: () => Promise<void>;
-      msRequestFullscreen?: () => Promise<void>;
-    };
-    const requestFS =
-      docEl.requestFullscreen ||
-      docEl.webkitRequestFullscreen ||
-      docEl.msRequestFullscreen;
-
-    if (requestFS) {
-      requestFS.call(docEl).catch(() => {});
-    }
-
     router.push(`/quiz/${item.slug}`);
   };
 
@@ -100,7 +86,7 @@ function SeriesCard({ item }: { item: DragonBallSeries }) {
             }
           }}
         >
-          <div className="relative aspect-[9/16] overflow-hidden">
+          <div className="relative aspect-9/16 overflow-hidden">
             <Image
               src={item.coverSrc}
               fill
