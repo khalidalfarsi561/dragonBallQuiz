@@ -29,7 +29,7 @@ export const dragonBallSeries: DragonBallSeries[] = [
   },
   {
     id: "dragon-ball-gt",
-    name: "دراغون بول جي تي",
+    name: "دراغون بول GT",
     subtitle: "رحلة مختلفة",
     slug: "dragon-ball-gt",
     coverSrc: "https://i.ibb.co/6b8K4tN/dragon-ball-gt-cover.png?version=1",

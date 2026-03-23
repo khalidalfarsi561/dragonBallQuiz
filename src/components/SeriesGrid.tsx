@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import {} from "react";
 import { motion } from "framer-motion";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -54,7 +54,7 @@ export default function SeriesGrid({ series }: SeriesGridProps) {
       variants={gridVariants}
       initial="hidden"
       animate="show"
-      className="grid grid-cols-2 gap-6 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4"
+      className="grid grid-cols-2 gap-4 sm:gap-6 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4"
     >
       {series.map((item) => (
         <SeriesCard key={item.slug} item={item} />
@@ -65,8 +65,6 @@ export default function SeriesGrid({ series }: SeriesGridProps) {
 
 function SeriesCard({ item }: { item: DragonBallSeries }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const arcs = item.arcs ?? [];
 
   const handleEnterQuiz = () => {
     const docEl = document.documentElement as unknown as {
@@ -102,7 +100,7 @@ function SeriesCard({ item }: { item: DragonBallSeries }) {
             }
           }}
         >
-          <div className="relative aspect-4/5 overflow-hidden">
+          <div className="relative aspect-[9/16] overflow-hidden">
             <Image
               src={item.coverSrc}
               fill
@@ -115,68 +113,17 @@ function SeriesCard({ item }: { item: DragonBallSeries }) {
               }
               className="object-cover transition-transform duration-500 group-hover:scale-105"
             />
+            <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/20 to-black/10 z-0" />
             <div className="absolute inset-y-0 left-0 w-20 bg-linear-to-r from-black/60 via-black/25 to-transparent" />
             <div className="absolute inset-y-0 right-0 w-20 bg-linear-to-l from-black/60 via-black/25 to-transparent" />
-            <div className="absolute right-3 top-3 flex items-start gap-2">
-              <div className="rounded-full bg-linear-to-r from-red-600 via-red-500 to-red-700 px-2.5 py-1 text-[11px] font-black leading-none text-white shadow-lg shadow-red-950/30 ring-1 ring-white/10">
-                {item.questionCount ?? "?"} سؤال
-              </div>
-              <div
-                className={`rounded-full px-2.5 py-1 text-[11px] font-black leading-none text-white shadow-lg ring-1 ring-white/10 ${
-                  item.slug === "dragon-ball-z"
-                    ? "bg-linear-to-r from-amber-500 via-orange-500 to-amber-600 shadow-amber-950/30"
-                    : item.slug === "dragon-ball-super"
-                      ? "bg-linear-to-r from-sky-500 via-cyan-500 to-sky-600 shadow-sky-950/30"
-                      : item.slug === "dragon-ball"
-                        ? "bg-linear-to-r from-fuchsia-500 via-violet-500 to-fuchsia-600 shadow-fuchsia-950/30"
-                        : "bg-linear-to-r from-emerald-500 via-teal-500 to-emerald-600 shadow-emerald-950/30"
-                }`}
-              >
-                {item.titleAr ?? item.name}
-              </div>
-            </div>
 
-            <div className="absolute inset-x-0 bottom-4 flex justify-center px-4">
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.preventDefault();
-                  setOpen((value) => !value);
-                }}
-                className="min-w-44 rounded-full border border-white/10 bg-linear-to-r from-amber-500 via-orange-500 to-red-500 px-5 py-2 text-center text-sm font-bold tracking-wide text-white backdrop-blur-md shadow-lg shadow-orange-950/30 transition hover:from-amber-400 hover:via-orange-400 hover:to-red-400"
-                aria-expanded={open}
-                aria-haspopup="listbox"
-              >
-                <span className="block text-sm uppercase tracking-[0.25em]">
-                  اختر الآرك
-                </span>
-              </button>
+            <div className="absolute inset-x-0 bottom-3 flex flex-col items-center px-4 z-10 pointer-events-none">
+              <h3 className="text-sm sm:text-lg font-black text-white text-center drop-shadow-lg [font-family:var(--font-ar-display),serif]">
+                {item.titleAr ?? item.name}
+              </h3>
             </div>
           </div>
         </div>
-
-        {open ? (
-          <div className="absolute inset-x-3 bottom-14 z-20 rounded-2xl border border-white/10 bg-zinc-950/95 p-2 shadow-2xl shadow-black/40 backdrop-blur-md">
-            <div className="max-h-44 overflow-y-auto rounded-xl">
-              {arcs.length > 0 ? (
-                arcs.map((arc) => (
-                  <button
-                    key={arc}
-                    type="button"
-                    className="block w-full rounded-xl px-3 py-2 text-right text-sm font-semibold text-zinc-100 transition hover:bg-white/10"
-                    onClick={() => setOpen(false)}
-                  >
-                    {arc}
-                  </button>
-                ))
-              ) : (
-                <div className="px-3 py-2 text-right text-sm text-zinc-300">
-                  آرك السايان
-                </div>
-              )}
-            </div>
-          </div>
-        ) : null}
       </div>
     </motion.div>
   );

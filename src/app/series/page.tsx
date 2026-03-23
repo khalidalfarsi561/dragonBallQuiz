@@ -19,7 +19,7 @@ export default async function SeriesPage() {
       </div>
 
       <div className="relative mb-10 text-center">
-        <h1 className="text-4xl font-black tracking-tight text-white md:text-5xl [font-family:var(--font-ar-display),var(--font-ar-body),serif]">
+        <h1 className="text-[clamp(1.2rem,5.5vw,2.25rem)] sm:text-4xl md:text-5xl font-black tracking-tight text-white whitespace-nowrap [font-family:var(--font-ar-display),var(--font-ar-body),serif]">
           اختبر معلوماتك في دراغون بول
         </h1>
       </div>
