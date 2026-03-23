@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useReducer, useState, useTransition } from "react";
 import type React from "react";
 import { useRouter } from "next/navigation";
 import QuizCard from "@/components/QuizCard";
+import QuizOption from "@/components/QuizOption";
 import TimerBadge from "@/components/TimerBadge";
 import UserAvatar from "@/components/UserAvatar";
 import { submitAnswer } from "@/actions/quiz";
@@ -20,12 +21,80 @@ export type PublicQuestion = {
 
 type Feedback = "idle" | "correct" | "wrong";
 
-type OptionState =
-  | "idle"
-  | "selected"
-  | "correct"
-  | "revealed-correct"
-  | "revealed-wrong";
+type OptionState = "idle" | "selected" | "correct" | "revealed-correct" | "revealed-wrong";
+
+type QuizState = {
+  feedback: Feedback;
+  message: string;
+  hasAnswered: boolean;
+  selectedOption: string | null;
+  pendingOption: string | null;
+  correctOption: string | null;
+  explanation: string;
+};
+
+type QuizAction =
+  | { type: "RESET" }
+  | { type: "SELECT_OPTION"; option: string }
+  | {
+      type: "SUBMIT_SUCCESS";
+      payload: {
+        isCorrect: boolean;
+        message: string;
+        correctOption: string | null;
+        explanation: string;
+      };
+    }
+  | { type: "SUBMIT_ERROR"; message: string }
+  | { type: "CLEAR_PENDING" };
+
+const initialQuizState: QuizState = {
+  feedback: "idle",
+  message: "",
+  hasAnswered: false,
+  selectedOption: null,
+  pendingOption: null,
+  correctOption: null,
+  explanation: "",
+};
+
+function quizReducer(state: QuizState, action: QuizAction): QuizState {
+  switch (action.type) {
+    case "RESET":
+      return initialQuizState;
+    case "SELECT_OPTION":
+      return {
+        ...state,
+        selectedOption: action.option,
+        pendingOption: action.option,
+        hasAnswered: true,
+        message: "",
+        feedback: "idle",
+      };
+    case "SUBMIT_SUCCESS":
+      return {
+        ...state,
+        feedback: action.payload.isCorrect ? "correct" : "wrong",
+        message: action.payload.message,
+        correctOption: action.payload.correctOption,
+        explanation: action.payload.explanation,
+      };
+    case "SUBMIT_ERROR":
+      return {
+        ...state,
+        hasAnswered: false,
+        feedback: "wrong",
+        message: action.message,
+      };
+    case "CLEAR_PENDING":
+      return {
+        ...state,
+        pendingOption: null,
+      };
+    default:
+      return state;
+  }
+}
 
 export default function QuizUI(props: {
   question: PublicQuestion | null;
@@ -51,21 +120,18 @@ export default function QuizUI(props: {
   const router = useRouter();
 
   const [powerLevel, setPowerLevel] = useState<number>(powerLevelProp);
-  const [feedback, setFeedback] = useState<Feedback>("idle");
-  const [message, setMessage] = useState<string>("");
-  const [hasAnswered, setHasAnswered] = useState(false);
+  const [state, dispatch] = useReducer(quizReducer, initialQuizState);
   const [pending, startTransition] = useTransition();
-  const [selectedOption, setSelectedOption] = useState<string | null>(null);
-  const [pendingOption, setPendingOption] = useState<string | null>(null);
-  const [correctOption, setCorrectOption] = useState<string | null>(null);
-  const [explanation, setExplanation] = useState<string>("");
 
   // Client-side timing (used فقط لإحساس السرعة)
   const questionStartRef = useRef<number>(0);
+  const [questionStartMs, setQuestionStartMs] = useState<number>(0);
 
   useEffect(() => {
     // effect is the right place for impure values like Date.now()
-    questionStartRef.current = Date.now();
+    const start = Date.now();
+    questionStartRef.current = start;
+    setQuestionStartMs(start);
   }, [question?.id]);
 
   useEffect(() => {
@@ -75,13 +141,7 @@ export default function QuizUI(props: {
 
   useEffect(() => {
     // reset selection when question changes
-    setSelectedOption(null);
-    setPendingOption(null);
-    setCorrectOption(null);
-    setExplanation("");
-    setHasAnswered(false);
-    setFeedback("idle");
-    setMessage("");
+    dispatch({ type: "RESET" });
   }, [question?.id]);
 
   const difficultyLabel = useMemo(() => {
@@ -103,8 +163,8 @@ export default function QuizUI(props: {
   }, [question?.difficultyTier]);
 
   const questionProgress = useMemo(() => {
-    // Progress "مبدئي" بدون تغييرات سيرفر:
-    // نستخدم اليوم/الأسبوع كإحساس تقدم، ويمكن استبداله لاحقًا بقيم حقيقية (index/total).
+    // Progress مبدئي بدون تغييرات سيرفر:
+    // نستخدم اليوم/الأسبوع كإحساس تقدم، ويمكن استبداله لاحقًا
     const day = new Date().getDate();
     const total = 30;
     const current = Math.min(Math.max(day, 1), total);
@@ -112,33 +172,34 @@ export default function QuizUI(props: {
   }, []);
 
   const onPick = (opt: string) => {
-    if (!question || pending || hasAnswered) return;
+    if (!question || pending || state.hasAnswered) return;
 
-    setSelectedOption(opt);
-    setPendingOption(opt);
-    setHasAnswered(true);
+    dispatch({ type: "SELECT_OPTION", option: opt });
 
     startTransition(async () => {
-      const timeMs = Date.now() - questionStartRef.current;
-      setMessage("");
-      setFeedback("idle");
+      const timeMs = Date.now() - questionStartMs;
+      dispatch({ type: "CLEAR_PENDING" });
 
       try {
         const res = await submitAnswer(seriesSlug ?? "dragon-ball", question.id, opt, questionToken, timeMs);
 
-        setFeedback(res.isCorrect ? "correct" : "wrong");
-        setMessage(res.message);
-        setCorrectOption(res.correctOption || null);
-        setExplanation(res.explanation || "");
+        dispatch({
+          type: "SUBMIT_SUCCESS",
+          payload: {
+            isCorrect: res.isCorrect,
+            message: res.message,
+            correctOption: res.correctOption || null,
+            explanation: res.explanation || "",
+          },
+        });
 
         // سيتم تحديثه بالقيمة الحقيقية القادمة من الخادم
         setPowerLevel(res.newPowerLevel);
       } catch {
-        setHasAnswered(false);
-        setFeedback("wrong");
-        setMessage("تعذر إرسال الإجابة. تأكد من تشغيل PocketBase وتسجيل الدخول.");
-      } finally {
-        setPendingOption(null);
+        dispatch({
+          type: "SUBMIT_ERROR",
+          message: "تعذر إرسال الإجابة. تأكد من تشغيل PocketBase وتسجيل الدخول.",
+        });
       }
     });
   };
@@ -166,7 +227,6 @@ export default function QuizUI(props: {
                 </p>
               </div>
             </div>
-
           </div>
         </header>
 
@@ -180,7 +240,7 @@ export default function QuizUI(props: {
               <QuizCard
                 key={question.id}
                 title="سؤال اليوم"
-                feedback={feedback}
+                feedback={state.feedback}
                 headerSlot={
                   <div className="flex flex-wrap items-center gap-2">
                     <span
@@ -193,7 +253,7 @@ export default function QuizUI(props: {
                       {difficultyLabel.text}
                     </span>
 
-                    <TimerBadge startedAtMs={questionStartRef.current} stopped={hasAnswered} />
+                    <TimerBadge startedAtMs={questionStartMs} stopped={state.hasAnswered} />
 
                     <span
                       className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-bold text-white/90 sm:px-2.5 sm:py-1 sm:text-xs"
@@ -205,109 +265,74 @@ export default function QuizUI(props: {
                   </div>
                 }
               >
-                <p className="mb-3 text-sm font-extrabold leading-6 text-white sm:mb-4 sm:text-[1.05rem] sm:leading-8">{question.content}</p>
+                <p className="mb-3 text-sm font-extrabold leading-6 text-white sm:mb-4 sm:text-[1.05rem] sm:leading-8">
+                  {question.content}
+                </p>
 
                 <div className="grid grid-cols-1 gap-2 sm:gap-3">
                   {question.options.map((opt) => {
-                    const state: OptionState = !selectedOption
-                      ? "idle"
-                      : feedback === "idle"
-                        ? opt !== selectedOption
-                          ? "idle"
-                          : "selected"
-                        : feedback === "correct"
-                          ? opt === selectedOption
-                            ? "correct"
-                            : "idle"
-                          : // feedback === "wrong"
-                            opt === correctOption
-                            ? "revealed-correct"
-                            : opt === selectedOption
-                              ? "revealed-wrong"
-                              : "idle";
-
                     const stateClass =
-                      state === "correct" || state === "revealed-correct"
-                        ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-50"
-                        : state === "revealed-wrong"
-                          ? "border-rose-400/40 bg-rose-500/15 text-rose-50"
-                          : state === "selected"
-                            ? "border-sky-400/30 bg-sky-500/10 text-white"
-                            : "border-white/10 bg-white/10 text-white";
+                      !state.selectedOption
+                        ? "border-white/10 bg-white/10 text-white"
+                        : state.feedback === "idle"
+                          ? opt !== state.selectedOption
+                            ? "border-white/10 bg-white/10 text-white"
+                            : "border-sky-400/30 bg-sky-500/10 text-white"
+                          : state.feedback === "correct"
+                            ? opt === state.selectedOption
+                              ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-50"
+                              : "border-white/10 bg-white/10 text-white"
+                            : opt === state.correctOption
+                              ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-50"
+                              : opt === state.selectedOption
+                                ? "border-rose-400/40 bg-rose-500/15 text-rose-50"
+                                : "border-white/10 bg-white/10 text-white";
 
-                    const isPendingThis = pending && pendingOption === opt;
-                    const isSelectedThis = opt === selectedOption;
+                    const isPendingThis = pending && state.pendingOption === opt;
+                    const isSelectedThis = opt === state.selectedOption;
 
                     return (
-                      <button
+                      <QuizOption
                         key={opt}
-                        type="button"
-                        disabled={pending || hasAnswered}
-                        onClick={() => onPick(opt)}
-                        className={[
-                          "relative w-full rounded-lg border px-3 py-2 text-start text-sm font-semibold transition sm:rounded-xl sm:px-4 sm:py-3",
-                          stateClass,
-                          "hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-60",
-                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950",
-                        ].join(" ")}
-                      >
-                        <span className="flex items-center justify-between gap-2 sm:gap-3">
-                          <span className="min-w-0 flex-1 whitespace-normal leading-5 sm:leading-6">{opt}</span>
-
-                          <span className="flex h-4 w-4 items-center justify-center sm:h-5 sm:w-5">
-                            {isPendingThis ? (
-                              <span
-                                className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white/80"
-                                aria-label="جاري الإرسال"
-                              />
-                            ) : feedback !== "idle" && isSelectedThis ? (
-                              <span
-                                className={[
-                                  "text-xs font-extrabold",
-                                  feedback === "correct" ? "text-emerald-300" : "text-rose-300",
-                                ].join(" ")}
-                                aria-hidden="true"
-                              >
-                                {feedback === "correct" ? "✓" : "✕"}
-                              </span>
-                            ) : null}
-                          </span>
-                        </span>
-                      </button>
+                        option={opt}
+                        stateClass={stateClass}
+                        isPendingThis={isPendingThis}
+                        isSelectedThis={isSelectedThis}
+                        feedback={state.feedback}
+                        disabled={pending || state.hasAnswered}
+                        onPick={() => onPick(opt)}
+                      />
                     );
                   })}
                 </div>
 
                 <div className="mt-4 min-h-10">
-                  {message ? (
+                  {state.message ? (
                     <p className="text-sm text-white/80" aria-live="polite">
-                      {message}
+                      {state.message}
                     </p>
                   ) : null}
 
-                  {feedback !== "idle" && explanation ? (
+                  {state.feedback !== "idle" && state.explanation ? (
                     <div className="mt-3 rounded-xl border border-white/10 bg-white/5 p-4">
                       <div className="mb-1 flex items-center justify-between gap-2">
                         <div className="text-xs font-bold text-white/70">توضيح الإجابة</div>
                         <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-bold text-white/70">
-                          {feedback === "correct" ? "✓" : "✕"}
+                          {state.feedback === "correct" ? "✓" : "✕"}
                         </span>
                       </div>
-                      <p className="text-sm leading-7 text-white/85">{explanation}</p>
+                      <p className="text-sm leading-7 text-white/85">{state.explanation}</p>
                     </div>
                   ) : null}
                 </div>
 
-                {feedback !== "idle" ? (
+                {state.feedback !== "idle" ? (
                   <button
                     type="button"
                     disabled={pending}
                     onClick={() => {
                       router.refresh();
-                      setSelectedOption(null);
-                      setHasAnswered(false);
-                      setFeedback("idle");
-                      setMessage("");
+                      dispatch({ type: "RESET" });
                     }}
                     className="mt-4 w-full rounded-xl border border-white/10 bg-white/10 px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950"
                   >

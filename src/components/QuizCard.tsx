@@ -2,6 +2,7 @@
 
 import { motion, useReducedMotion } from "framer-motion";
 import { useMemo } from "react";
+import { cn } from "lib/utils";
 
 type QuizCardProps = {
   title?: string;
@@ -78,21 +79,22 @@ export default function QuizCard({
     return { duration: 0.15 } as const;
   }, [feedback, shouldReduceMotion]);
 
-  const feedbackFrameClass =
+  const feedbackFrameClass = cn(
     feedback === "correct"
       ? "border-emerald-400/30 ring-1 ring-emerald-400/10 shadow-emerald-500/10"
       : feedback === "wrong"
         ? "border-rose-400/30 ring-1 ring-rose-400/10 shadow-rose-500/10"
-        : "border-white/10 ring-1 ring-white/5 shadow-black/20";
+        : "border-white/10 ring-1 ring-white/5 shadow-black/20",
+  );
 
   return (
     <motion.div
       animate={animate}
       transition={transition}
-      className={[
+      className={cn(
         "relative mx-auto flex w-full max-w-md flex-1 flex-col overflow-hidden rounded-2xl border bg-white/5 p-4 shadow-lg backdrop-blur-md dark:bg-black/20 sm:h-auto sm:max-h-none sm:flex-none sm:max-w-2xl sm:aspect-square sm:p-5",
         feedbackFrameClass,
-      ].join(" ")}
+      )}
     >
       {title ? (
         <div className="mb-4 border-b border-white/10 pb-3">
@@ -104,12 +106,12 @@ export default function QuizCard({
 
               {feedback !== "idle" ? (
                 <span
-                  className={[
+                  className={cn(
                     "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-bold",
                     feedback === "correct"
                       ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-100"
                       : "border-rose-400/30 bg-rose-500/10 text-rose-100",
-                  ].join(" ")}
+                  )}
                   aria-hidden="true"
                 >
                   {feedback === "correct" ? "إجابة صحيحة" : "إجابة خاطئة"}
