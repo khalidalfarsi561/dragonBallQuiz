@@ -84,6 +84,24 @@ export default function QuizUI(props: {
     setMessage("");
   }, [question?.id]);
 
+  useEffect(() => {
+    return () => {
+      const doc = document as Document & {
+        fullscreenElement?: Element | null;
+        webkitFullscreenElement?: Element | null;
+        exitFullscreen?: () => Promise<void>;
+        webkitExitFullscreen?: () => Promise<void>;
+        msExitFullscreen?: () => Promise<void>;
+      };
+      const exitFS = doc.exitFullscreen || doc.webkitExitFullscreen || doc.msExitFullscreen;
+      if (doc.fullscreenElement || doc.webkitFullscreenElement) {
+        if (typeof exitFS === "function") {
+          exitFS.call(doc).catch(() => {});
+        }
+      }
+    };
+  }, []);
+
   const difficultyLabel = useMemo(() => {
     const tier = question?.difficultyTier ?? 0;
     if (tier <= 1)

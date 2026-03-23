@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import Image from "next/image";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 type DragonBallSeries = {
   slug: string;
@@ -54,7 +54,7 @@ export default function SeriesGrid({ series }: SeriesGridProps) {
       variants={gridVariants}
       initial="hidden"
       animate="show"
-      className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4"
+      className="grid grid-cols-2 gap-6 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4"
     >
       {series.map((item) => (
         <SeriesCard key={item.slug} item={item} />
@@ -64,18 +64,45 @@ export default function SeriesGrid({ series }: SeriesGridProps) {
 }
 
 function SeriesCard({ item }: { item: DragonBallSeries }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const arcs = item.arcs ?? [];
+
+  const handleEnterQuiz = () => {
+    const docEl = document.documentElement as unknown as {
+      requestFullscreen?: () => Promise<void>;
+      webkitRequestFullscreen?: () => Promise<void>;
+      msRequestFullscreen?: () => Promise<void>;
+    };
+    const requestFS =
+      docEl.requestFullscreen ||
+      docEl.webkitRequestFullscreen ||
+      docEl.msRequestFullscreen;
+
+    if (requestFS) {
+      requestFS.call(docEl).catch(() => {});
+    }
+
+    router.push(`/quiz/${item.slug}`);
+  };
 
   return (
     <motion.div variants={cardVariants}>
       <div className="group relative overflow-visible rounded-3xl border border-white/10 bg-white/5 backdrop-blur-md">
-        <Link
-          href={`/quiz/${item.slug}`}
-          className="relative block overflow-hidden rounded-3xl"
+        <div
+          role="button"
+          tabIndex={0}
+          className="relative block cursor-pointer overflow-hidden rounded-3xl"
           dir="rtl"
+          onClick={handleEnterQuiz}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              handleEnterQuiz();
+            }
+          }}
         >
-          <div className="relative aspect-9/16 overflow-hidden">
+          <div className="relative aspect-4/5 overflow-hidden">
             <Image
               src={item.coverSrc}
               fill
@@ -126,7 +153,7 @@ function SeriesCard({ item }: { item: DragonBallSeries }) {
               </button>
             </div>
           </div>
-        </Link>
+        </div>
 
         {open ? (
           <div className="absolute inset-x-3 bottom-14 z-20 rounded-2xl border border-white/10 bg-zinc-950/95 p-2 shadow-2xl shadow-black/40 backdrop-blur-md">

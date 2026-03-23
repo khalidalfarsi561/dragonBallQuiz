@@ -90,7 +90,7 @@ export default function QuizCard({
       animate={animate}
       transition={transition}
       className={[
-        "relative mx-auto flex w-[calc(100vw-1rem)] max-w-none h-[calc(100svh-1rem)] max-h-[calc(100svh-1rem)] flex-col overflow-hidden rounded-2xl border bg-white/5 p-4 shadow-lg backdrop-blur-md dark:bg-black/20 sm:h-auto sm:max-h-none sm:w-full sm:max-w-[min(100vw-2rem,42rem)] sm:aspect-square sm:p-5",
+        "relative mx-auto flex w-full max-w-md flex-1 flex-col overflow-hidden rounded-2xl border bg-white/5 p-4 shadow-lg backdrop-blur-md dark:bg-black/20 sm:h-auto sm:max-h-none sm:flex-none sm:max-w-2xl sm:aspect-square sm:p-5",
         feedbackFrameClass,
       ].join(" ")}
     >
