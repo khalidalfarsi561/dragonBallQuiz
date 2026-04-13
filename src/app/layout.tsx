@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Cairo, Noto_Sans_Arabic } from "next/font/google";
 import "./globals.css";
 
@@ -22,6 +22,11 @@ const cairo = Cairo({
 });
 
 const siteUrl = new URL("http://localhost:3000");
+
+export const viewport: Viewport = {
+  themeColor: "#0a0a0a",
+  viewportFit: "cover",
+};
 
 export const metadata: Metadata = {
   metadataBase: siteUrl,

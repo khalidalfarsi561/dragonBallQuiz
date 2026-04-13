@@ -25,7 +25,7 @@ export default async function QuizProfilePage() {
       className="flex min-h-screen items-center justify-center bg-zinc-950 px-4 py-6 text-white lg:px-6 lg:py-8"
     >
       <div className="mx-auto flex w-full max-w-md justify-center">
-        <div className="flex h-[88vh] w-full flex-col justify-between rounded-4xl border border-white/10 bg-white/5 p-6 backdrop-blur-md">
+        <div className="flex min-h-[85dvh] w-full flex-col justify-between rounded-4xl border border-white/10 bg-white/5 p-6 backdrop-blur-md">
           <div className="flex flex-1 flex-col items-center justify-center gap-8 text-center">
             <UserAvatar
               src={avatarSrc}

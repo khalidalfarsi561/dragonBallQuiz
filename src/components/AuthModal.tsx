@@ -43,7 +43,7 @@ export default function AuthModal() {
   const submitLabel = pending ? "..." : mode === "signin" ? "دخول" : "إنشاء حساب";
 
   return (
-    <div className="flex flex-1 items-center justify-center bg-zinc-950 px-6 py-10 text-white">
+    <div className="flex flex-1 items-center justify-center bg-zinc-950 px-6 pt-10 pb-[max(2.5rem,env(safe-area-inset-bottom))] text-white">
       <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-md">
         <h1 className="text-xl font-extrabold">ابدأ التحدي</h1>
         <p className="mt-1 text-sm text-white/70">سجّل دخولك لتثبيت مستوى طاقتك ولوحة الصدارة.</p>
