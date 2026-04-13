@@ -128,11 +128,11 @@ export function evaluateZenkai(params: {
     };
   }
 
-  // تفعيل الزنكاي (منطق مصحح):
-  // - massiveStreakLost: فقد سلسلة قوية (>=5) دفعة واحدة
-  // - reachedWrongThreshold: وصل إلى 3 أخطاء متتالية
+  // تفعيل الزنكاي:
+  // - massiveStreakLost: فقد سلسلة انتصارات قوية (>=5)
+  // - reachedWrongThreshold: وصل إلى 3 أخطاء متتالية أو أكثر
   const massiveStreakLost = prevStreak >= 5 && nextStreak === 0;
-  const reachedWrongThreshold = nextConsecutiveWrong === 3;
+  const reachedWrongThreshold = nextConsecutiveWrong >= 3;
 
   if (massiveStreakLost || reachedWrongThreshold) {
     return {

@@ -16,6 +16,7 @@ type DragonBallSeries = {
   coverSrc: string;
   coverLabel?: string;
   coverHint?: string;
+  imageAlt?: string;
 };
 
 type SeriesGridProps = {
@@ -90,7 +91,7 @@ function SeriesCard({ item }: { item: DragonBallSeries }) {
             <Image
               src={item.coverSrc}
               fill
-              alt={item.name}
+              alt={item.imageAlt ?? item.name}
               sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
               loading="eager"
               priority={

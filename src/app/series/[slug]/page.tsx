@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { dragonBallSeries } from "@/lib/series";
 
@@ -6,6 +7,24 @@ type SeriesPageProps = {
     slug: string;
   }>;
 };
+
+export async function generateMetadata({
+  params,
+}: SeriesPageProps): Promise<Metadata> {
+  const { slug } = await params;
+  const series = dragonBallSeries.find((item) => item.slug === slug);
+
+  if (!series) {
+    return {
+      title: "السلسلة غير موجودة | تحدي دراغون بول",
+    };
+  }
+
+  return {
+    title: `اختبار ${series.name} | تحدي دراغون بول`,
+    description: series.metaDescription,
+  };
+}
 
 export default async function SeriesSlugPage({ params }: SeriesPageProps) {
   const { slug } = await params;
