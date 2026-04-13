@@ -146,20 +146,45 @@ export default function QuizUI(props: {
 
   const difficultyLabel = useMemo(() => {
     const tier = question?.difficultyTier ?? 0;
-    if (tier <= 1)
-      return {
-        text: "سهل",
-        className: "border-emerald-400/30 bg-emerald-500/10 text-emerald-100",
-      };
-    if (tier === 2)
-      return {
-        text: "متوسط",
-        className: "border-amber-400/30 bg-amber-500/10 text-amber-100",
-      };
-    return {
-      text: "صعب",
-      className: "border-rose-400/30 bg-rose-500/10 text-rose-100",
-    };
+
+    switch (tier) {
+      case 1:
+        return {
+          text: "سهل",
+          className:
+            "border-emerald-400/40 bg-emerald-500/10 text-emerald-100 shadow-[0_0_18px_rgba(16,185,129,0.35)]",
+        };
+      case 2:
+        return {
+          text: "متوسط",
+          className:
+            "border-amber-400/40 bg-amber-500/10 text-amber-100 shadow-[0_0_18px_rgba(245,158,11,0.35)]",
+        };
+      case 3:
+        return {
+          text: "صعب",
+          className:
+            "border-orange-400/40 bg-orange-500/10 text-orange-100 shadow-[0_0_18px_rgba(249,115,22,0.35)]",
+        };
+      case 4:
+        return {
+          text: "خبير",
+          className:
+            "border-fuchsia-400/40 bg-fuchsia-500/10 text-fuchsia-100 shadow-[0_0_18px_rgba(192,38,211,0.35)]",
+        };
+      case 5:
+        return {
+          text: "أسطوري",
+          className:
+            "border-cyan-300/50 bg-slate-950/40 text-cyan-100 shadow-[0_0_22px_rgba(34,211,238,0.45),0_0_40px_rgba(226,232,240,0.18)]",
+        };
+      default:
+        return {
+          text: "سهل",
+          className:
+            "border-emerald-400/40 bg-emerald-500/10 text-emerald-100 shadow-[0_0_18px_rgba(16,185,129,0.35)]",
+        };
+    }
   }, [question?.difficultyTier]);
 
   const questionProgress = useMemo(() => {
