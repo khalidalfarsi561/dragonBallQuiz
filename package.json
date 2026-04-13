@@ -9,12 +9,15 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@tailwindcss/postcss": "^4.2.2",
     "clsx": "^2.1.1",
-    "tailwind-merge": "^3.3.1",
     "framer-motion": "^12.23.24",
-    "next": "15.5.0",
+    "next": "^16.2.3",
+    "pocketbase": "^0.26.8",
     "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "react-dom": "19.1.0",
+    "tailwind-merge": "^3.3.1",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^24",
