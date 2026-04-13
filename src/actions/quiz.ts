@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { getKV } from "@/lib/kv";
+import { AppError, formatQuizErrorResponse } from "@/lib/errors";
 import type { LeaderboardRecord, QuestionRecord, UserRecord } from "@/lib/pocketbase";
 import { createPBAdminClient, createPBServerClient } from "@/lib/pocketbase";
 import {
@@ -62,107 +63,93 @@ const submitAnswerSchema = z.object({
   timeMs: z.number().int().min(0).max(120_000).optional(),
 });
 
-export async function submitAnswer(
-  seriesSlug: string,
-  questionId: string,
-  selectedOption: string,
-  questionToken: string | null,
-  timeMs?: number
-): Promise<{
+type SubmitAnswerSuccess = {
   isCorrect: boolean;
   message: string;
   newPowerLevel: number;
   correctOption: string;
   explanation: string;
-}> {
-  // 1) Input Validation (Zod)
-  const parsed = submitAnswerSchema.safeParse({ seriesSlug, questionId, selectedOption, questionToken, timeMs });
-  if (!parsed.success) {
-    return {
-      isCorrect: false,
-      message: "مدخلات غير صالحة.",
-      newPowerLevel: 0,
-      correctOption: "",
-      explanation: "",
-    };
-  }
+};
 
-  // 2) Authentication Verification (Server-side PB client per request)
-  //    نستخدمه فقط للتحقق من الجلسة واستخراج userId (بدون أي عمليات على collections المحمية)
-  const pb = await createPBServerClient();
+type QuizTokenPayload = {
+  userId: string;
+  questionId: string;
+  nonce: string;
+  issuedAtMs: number;
+  expiresAtMs: number;
+};
 
-  if (!pb.authStore.isValid || !pb.authStore.record?.id) {
-    return {
-      isCorrect: false,
-      message: "يجب تسجيل الدخول للإجابة.",
-      newPowerLevel: 0,
-      correctOption: "",
-      explanation: "",
-    };
-  }
+type ValidateQuizSecurityResult = {
+  tokenPayload: QuizTokenPayload;
+};
 
-  const userId = pb.authStore.record.id;
+type ProcessGamificationResult = {
+  nextPowerLevel: number;
+  awardedScore: number;
+  nextStreak: number;
+  currentZenkaiBoosts: number;
+  zenkaiActivated: boolean;
+  nextZenkai: ZenkaiState | null;
+};
 
-  // ---- Verify question token (anti-cheat + anti-replay binding) ----
-  const tokenCheck = verifyQuizQuestionToken(parsed.data.questionToken);
+type ZenkaiPersistenceData = Pick<
+  ProcessGamificationResult,
+  "currentZenkaiBoosts" | "zenkaiActivated" | "nextZenkai"
+>;
+
+type LeaderboardCreatePayload = Omit<
+  LeaderboardRecord,
+  "id" | "collectionId" | "collectionName" | "created" | "updated"
+>;
+
+function getQuestionExplanation(questionRecord: QuestionRecord) {
+  return String((questionRecord as unknown as { explanation?: unknown }).explanation ?? "");
+}
+
+async function validateQuizSecurity(
+  userId: string,
+  questionId: string,
+  questionToken: string
+): Promise<ValidateQuizSecurityResult> {
+  const tokenCheck = verifyQuizQuestionToken(questionToken);
+
   if (!tokenCheck.ok) {
-    return {
-      isCorrect: false,
-      message: "انتهت صلاحية السؤال أو أن الطلب غير صالح.",
-      newPowerLevel: 0,
-      correctOption: "",
-      explanation: "",
-    };
+    throw new AppError("انتهت صلاحية السؤال أو أن الطلب غير صالح.", 400, "INVALID_QUESTION_TOKEN");
   }
 
-  if (tokenCheck.payload.userId !== userId || tokenCheck.payload.questionId !== parsed.data.questionId) {
-    return {
-      isCorrect: false,
-      message: "طلب غير مصرح به.",
-      newPowerLevel: 0,
-      correctOption: "",
-      explanation: "",
-    };
+  if (tokenCheck.payload.userId !== userId || tokenCheck.payload.questionId !== questionId) {
+    throw new AppError("طلب غير مصرح به.", 403, "UNAUTHORIZED_QUESTION_REQUEST");
   }
 
   const replay = await markNonceUsedOrReject({
     userId,
-    questionId: parsed.data.questionId,
+    questionId,
     nonce: tokenCheck.payload.nonce,
     expiresAtMs: tokenCheck.payload.expiresAtMs,
   });
 
   if (!replay.ok) {
-    return {
-      isCorrect: false,
-      message: "تم إرسال هذه الإجابة مسبقاً (محاولة مكررة).",
-      newPowerLevel: 0,
-      correctOption: "",
-      explanation: "",
-    };
+    throw new AppError("تم إرسال هذه الإجابة مسبقاً (محاولة مكررة).", 409, "REPLAY_REJECTED");
   }
 
-  // ---- Rate Limiting (after auth) ----
   const rl = await checkAndTouchRateLimit(userId);
+
   if (!rl.ok) {
-    return {
-      isCorrect: false,
-      message: rl.message,
-      newPowerLevel: 0,
-      correctOption: "",
-      explanation: "",
-    };
+    throw new AppError(rl.message, 429, "RATE_LIMITED");
   }
 
-  // 3) Admin client (يتجاوز API Rules بأمان داخل الخادم)
-  const adminPb = await createPBAdminClient();
+  return {
+    tokenPayload: tokenCheck.payload as QuizTokenPayload,
+  };
+}
 
-  // 4) Compare Answer (NEVER expose correct_answer to client)
-  const q = await adminPb.collection<QuestionRecord>("questions").getOne(parsed.data.questionId);
-
-  const isCorrect = parsed.data.selectedOption === q.correct_answer;
-
-  // 5) Update leaderboard securely on server (admin)
+async function processGamificationAndLeaderboard(
+  adminPb: Awaited<ReturnType<typeof createPBAdminClient>>,
+  userId: string,
+  questionRecord: QuestionRecord,
+  isCorrect: boolean,
+  safeTimeMs: number
+): Promise<ProcessGamificationResult> {
   let leaderboard: LeaderboardRecord | null = null;
 
   try {
@@ -171,10 +158,7 @@ export async function submitAnswer(
     leaderboard = null;
   }
 
-  type LeaderboardCreatePayload = Omit<LeaderboardRecord, "id" | "collectionId" | "collectionName" | "created" | "updated">;
-
   if (!leaderboard) {
-    // PocketBase schema uses field name `user_id` (relation) not `user`
     const createPayload: LeaderboardCreatePayload = {
       user_id: userId,
       score: 0,
@@ -185,45 +169,29 @@ export async function submitAnswer(
     leaderboard = await adminPb.collection<LeaderboardRecord>("leaderboard").create(createPayload);
   }
 
-  // Type-narrowing safety
-  const lb = leaderboard;
-  if (!lb) {
-    // should never happen, but keep strict TS + safety
-    return {
-      isCorrect: false,
-      message: "حدث خطأ غير متوقع. حاول مرة أخرى.",
-      newPowerLevel: 0,
-      correctOption: "",
-      explanation: "",
-    };
+  if (!leaderboard) {
+    throw new AppError("حدث خطأ غير متوقع. حاول مرة أخرى.", 500, "LEADERBOARD_INIT_FAILED");
   }
 
-  // --- Gamification (server-side) ---
-  // Base score can later vary by difficulty, speed, etc.
-  const baseScore = 10;
+  const userRecord = await adminPb.collection<UserRecord>("users").getOne(userId);
 
-  // Pull user data from DB via admin (to support locked-down rules + zenkai persistence)
-  const user = await adminPb.collection<UserRecord>("users").getOne(userId);
-
-  const currentPowerLevel = Number(user.power_level ?? 0);
-  const currentZenkaiBoosts = Number(user.zenkai_boosts ?? 0);
+  const currentPowerLevel = Number(userRecord.power_level ?? 0);
+  const currentZenkaiBoosts = Number(userRecord.zenkai_boosts ?? 0);
 
   const currentZenkai: ZenkaiState | null =
-    Number(user.zenkai_attempts_left ?? 0) > 0
+    Number(userRecord.zenkai_attempts_left ?? 0) > 0
       ? {
-          multiplier: Number(user.active_zenkai_multiplier ?? 0),
-          remainingAttempts: Number(user.zenkai_attempts_left ?? 0),
+          multiplier: Number(userRecord.active_zenkai_multiplier ?? 0),
+          remainingAttempts: Number(userRecord.zenkai_attempts_left ?? 0),
         }
       : null;
 
-  // Simple streak transition
-  const prevStreak = lb.streak ?? 0;
+  const prevStreak = leaderboard.streak ?? 0;
   const nextStreak = isCorrect ? prevStreak + 1 : 0;
 
-  const prevConsecutiveWrong = lb.consecutive_wrong ?? 0;
+  const prevConsecutiveWrong = leaderboard.consecutive_wrong ?? 0;
   const nextConsecutiveWrong = isCorrect ? 0 : prevConsecutiveWrong + 1;
 
-  // Evaluate zenkai activation (with persistence)
   const zenkaiEval = evaluateZenkai({
     wasCorrect: isCorrect,
     prevStreak,
@@ -233,39 +201,26 @@ export async function submitAnswer(
     currentZenkai,
   });
 
+  const baseScore = 10;
   const awardedScore = computeAwardedScore({
     baseScore,
     zenkai: zenkaiEval.nextZenkai,
   });
 
-  // Update leaderboard with awardedScore / nextStreak
   if (isCorrect) {
-    await adminPb.collection<LeaderboardRecord>("leaderboard").update(lb.id, {
-      score: (lb.score ?? 0) + awardedScore,
+    await adminPb.collection<LeaderboardRecord>("leaderboard").update(leaderboard.id, {
+      score: (leaderboard.score ?? 0) + awardedScore,
       streak: nextStreak,
       consecutive_wrong: nextConsecutiveWrong,
     });
   } else {
-    await adminPb.collection<LeaderboardRecord>("leaderboard").update(lb.id, {
+    await adminPb.collection<LeaderboardRecord>("leaderboard").update(leaderboard.id, {
       streak: 0,
       consecutive_wrong: nextConsecutiveWrong,
     });
   }
 
-  // Calculate power level (difficulty from question, time measured server-side from token issuance)
-  const difficultyTier = (q.difficulty_tier ?? 1) as DifficultyTier;
-  const safeTimeMs = Math.min(Math.max(Date.now() - tokenCheck.payload.issuedAtMs, 0), 120_000);
-
-  // Anti-cheat: hard timeout (server-trusted)
-  if (safeTimeMs > 45_000) {
-    return {
-      isCorrect: false,
-      message: "انتهى وقت الإجابة",
-      newPowerLevel: currentPowerLevel,
-      correctOption: q.correct_answer,
-      explanation: String((q as unknown as { explanation?: unknown }).explanation ?? ""),
-    };
-  }
+  const difficultyTier = (questionRecord.difficulty_tier ?? 1) as DifficultyTier;
 
   const nextPowerLevel = calculatePowerLevel({
     currentPowerLevel,
@@ -276,51 +231,129 @@ export async function submitAnswer(
     awardedScore,
   });
 
-  // ---- Daily Quests & Skill Points (silent background update) ----
-  // هذه العملية لا تؤثر على الاستجابة الأساسية. نُشغّلها بدون تعطيل (fire-and-forget).
-  // IMPORTANT: نستخدم adminPb فقط داخل الخادم مع بقاء آليات الأمان الحالية.
+  return {
+    nextPowerLevel,
+    awardedScore,
+    nextStreak,
+    currentZenkaiBoosts,
+    zenkaiActivated: zenkaiEval.zenkaiActivated,
+    nextZenkai: zenkaiEval.nextZenkai,
+  };
+}
+
+async function updateUserStatsAndQuests(
+  adminPb: Awaited<ReturnType<typeof createPBAdminClient>>,
+  userRecord: UserRecord,
+  isCorrect: boolean,
+  nextStreak: number,
+  nextPowerLevel: number,
+  zenkaiData: ZenkaiPersistenceData
+): Promise<void> {
   try {
     const questUpdate = updateDailyQuestsOnAnswer({
-      dailyQuests: user.daily_quests,
-      lastLogin: user.last_login,
+      dailyQuests: userRecord.daily_quests,
+      lastLogin: userRecord.last_login,
       wasCorrect: isCorrect,
       nextStreak,
     });
 
-    if (questUpdate.earnedSkillPoints > 0 || user.last_login !== questUpdate.lastLoginToStore) {
-      await adminPb.collection<UserRecord>("users").update(userId, {
-        skill_points: Number(user.skill_points ?? 0) + questUpdate.earnedSkillPoints,
+    if (questUpdate.earnedSkillPoints > 0 || userRecord.last_login !== questUpdate.lastLoginToStore) {
+      await adminPb.collection<UserRecord>("users").update(userRecord.id, {
+        skill_points: Number(userRecord.skill_points ?? 0) + questUpdate.earnedSkillPoints,
         daily_quests: questUpdate.nextDailyQuests as unknown,
         last_login: questUpdate.lastLoginToStore,
       } satisfies Partial<UserRecord>);
     } else {
-      // حتى بدون مكافآت، نحدّث daily_quests إذا كان تقدم المهام تغيّر
-      await adminPb.collection<UserRecord>("users").update(userId, {
+      await adminPb.collection<UserRecord>("users").update(userRecord.id, {
         daily_quests: questUpdate.nextDailyQuests as unknown,
         last_login: questUpdate.lastLoginToStore,
       } satisfies Partial<UserRecord>);
     }
+
+    await adminPb.collection<UserRecord>("users").update(userRecord.id, {
+      power_level: nextPowerLevel,
+      zenkai_boosts: zenkaiData.currentZenkaiBoosts + (zenkaiData.zenkaiActivated ? 1 : 0),
+      active_zenkai_multiplier: zenkaiData.nextZenkai?.multiplier ?? 0,
+      zenkai_attempts_left: zenkaiData.nextZenkai?.remainingAttempts ?? 0,
+    } satisfies Partial<UserRecord>);
   } catch (error) {
-    console.error("[Quest Update Error]:", error);
+    console.error("[User Stats / Quest Update Error]:", error);
   }
+}
 
-  // Persist power level, and increment zenkai_boosts when activated
-  // IMPORTANT: this is server-side update; user should not be allowed to update power_level directly via rules.
-  await adminPb.collection<UserRecord>("users").update(userId, {
-    power_level: nextPowerLevel,
-    zenkai_boosts: currentZenkaiBoosts + (zenkaiEval.zenkaiActivated ? 1 : 0),
+export async function submitAnswer(
+  seriesSlug: string,
+  questionId: string,
+  selectedOption: string,
+  questionToken: string | null,
+  timeMs?: number
+): Promise<SubmitAnswerSuccess> {
+  try {
+    const parsed = submitAnswerSchema.safeParse({ seriesSlug, questionId, selectedOption, questionToken, timeMs });
 
-    active_zenkai_multiplier: zenkaiEval.nextZenkai?.multiplier ?? 0,
-    zenkai_attempts_left: zenkaiEval.nextZenkai?.remainingAttempts ?? 0,
-  } satisfies Partial<UserRecord>);
+    if (!parsed.success) {
+      throw new AppError("مدخلات غير صالحة.", 400, "INVALID_INPUT");
+    }
 
-  // 5) Return minimal safe payload
-  // NOTE: correctOption is returned only AFTER answer submission to allow UI to highlight it.
-  return {
-    isCorrect,
-    message: isCorrect ? "إجابة صحيحة! أحسنت." : "إجابة خاطئة. حاول مرة أخرى.",
-    newPowerLevel: nextPowerLevel,
-    correctOption: q.correct_answer,
-    explanation: String((q as unknown as { explanation?: unknown }).explanation ?? ""),
-  };
+    const pb = await createPBServerClient();
+
+    if (!pb.authStore.isValid || !pb.authStore.record?.id) {
+      throw new AppError("يجب تسجيل الدخول للإجابة.", 401, "UNAUTHENTICATED");
+    }
+
+    const userId = pb.authStore.record.id;
+
+    const { tokenPayload } = await validateQuizSecurity(userId, parsed.data.questionId, parsed.data.questionToken);
+
+    const adminPb = await createPBAdminClient();
+    const questionRecord = await adminPb.collection<QuestionRecord>("questions").getOne(parsed.data.questionId);
+
+    const isCorrect = parsed.data.selectedOption === questionRecord.correct_answer;
+    const safeTimeMs = Math.min(Math.max(Date.now() - tokenPayload.issuedAtMs, 0), 120_000);
+
+    if (safeTimeMs > 45_000) {
+      const userRecord = await adminPb.collection<UserRecord>("users").getOne(userId);
+
+      return {
+        isCorrect: false,
+        message: "انتهى وقت الإجابة",
+        newPowerLevel: Number(userRecord.power_level ?? 0),
+        correctOption: questionRecord.correct_answer,
+        explanation: getQuestionExplanation(questionRecord),
+      };
+    }
+
+    const gamificationResult = await processGamificationAndLeaderboard(
+      adminPb,
+      userId,
+      questionRecord,
+      isCorrect,
+      safeTimeMs
+    );
+
+    const userRecord = await adminPb.collection<UserRecord>("users").getOne(userId);
+
+    void updateUserStatsAndQuests(
+      adminPb,
+      userRecord,
+      isCorrect,
+      gamificationResult.nextStreak,
+      gamificationResult.nextPowerLevel,
+      {
+        currentZenkaiBoosts: gamificationResult.currentZenkaiBoosts,
+        zenkaiActivated: gamificationResult.zenkaiActivated,
+        nextZenkai: gamificationResult.nextZenkai,
+      }
+    );
+
+    return {
+      isCorrect,
+      message: isCorrect ? "إجابة صحيحة! أحسنت." : "إجابة خاطئة. حاول مرة أخرى.",
+      newPowerLevel: gamificationResult.nextPowerLevel,
+      correctOption: questionRecord.correct_answer,
+      explanation: getQuestionExplanation(questionRecord),
+    };
+  } catch (error) {
+    return formatQuizErrorResponse(error);
+  }
 }
