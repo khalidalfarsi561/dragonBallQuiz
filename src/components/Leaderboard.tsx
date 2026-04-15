@@ -80,8 +80,6 @@ export default function Leaderboard(props: { initialItems?: LeaderboardItem[] })
         // ignore UI errors for now
       });
     }
-
-    void loadInitial();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
